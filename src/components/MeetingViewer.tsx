@@ -5,6 +5,8 @@
 
 import React, { useState } from "react";
 import { Meeting } from "../types";
+import { formatInUTC5 } from "../lib/dateUtils";
+import { jsPDF } from "jspdf";
 import {
   FileText,
   Search,
@@ -91,7 +93,7 @@ export default function MeetingViewer({
 
   const handleExportMarkdown = (meeting: Meeting) => {
     const mdContent = `# ${meeting.title}
-Date: ${new Date(meeting.date).toLocaleDateString()}
+Fecha: ${formatInUTC5(meeting.date, "datetime")} (UTC-5)
 Duration: ${meeting.duration}
 
 ## AI Summary & Actions
@@ -108,6 +110,143 @@ ${meeting.transcript}
     const jsonStr = JSON.stringify(meeting, null, 2);
     const cleanName = meeting.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     downloadFile(`${cleanName}-vault.json`, jsonStr, "application/json");
+  };
+
+  const handleExportPDF = (meeting: Meeting) => {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const maxLineWidth = pageWidth - (margin * 2);
+
+    let yPosition = 25;
+
+    const checkPageOverflow = (neededHeight: number) => {
+      if (yPosition + neededHeight > pageHeight - margin) {
+        doc.addPage();
+        drawPageBackground();
+        yPosition = 25;
+      }
+    };
+
+    const drawPageBackground = () => {
+      // Top accent bar
+      doc.setFillColor(44, 94, 173); // #2C5EAD
+      doc.rect(0, 0, pageWidth, 4, "F");
+
+      // Footer
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`MeetingBrain AI Summary Note  |  ${meeting.title}`, margin, pageHeight - 10);
+      const pageNum = doc.getNumberOfPages();
+      doc.text(`Pag. ${pageNum}`, pageWidth - margin - 15, pageHeight - 10);
+    };
+
+    drawPageBackground();
+
+    // Document Header
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(20);
+    doc.setTextColor(26, 37, 58);
+    const titleLines = doc.splitTextToSize(meeting.title, maxLineWidth);
+    doc.text(titleLines, margin, yPosition);
+    yPosition += (titleLines.length * 8) + 4;
+
+    // Subheader / Metadata
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(120, 130, 150);
+    const dateStr = `Fecha: ${formatInUTC5(meeting.date, "datetime")} (UTC-5)`;
+    const durationStr = `Duracion: ${meeting.duration}`;
+    doc.text(`${dateStr}   |   ${durationStr}`, margin, yPosition);
+    yPosition += 8;
+
+    // Horizontal line separator
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPosition, pageWidth - margin, yPosition);
+    yPosition += 12;
+
+    // Sections
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(44, 94, 173);
+    doc.text("RESUMEN DE INTELIGENCIA ARTIFICIAL", margin, yPosition);
+    yPosition += 10;
+
+    const summaryLines = meeting.summary.split("\n");
+    doc.setTextColor(51, 65, 85);
+
+    summaryLines.forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed === "") {
+        yPosition += 4;
+        return;
+      }
+
+      if (trimmed.startsWith("###")) {
+        const text = trimmed.replace(/^###\s*/, "").toUpperCase();
+        checkPageOverflow(10);
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(44, 94, 173);
+        doc.text(text, margin, yPosition);
+        yPosition += 7;
+      } else if (trimmed.startsWith("##")) {
+        const text = trimmed.replace(/^##\s*/, "");
+        checkPageOverflow(12);
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text(text, margin, yPosition);
+        yPosition += 8;
+      } else if (trimmed.startsWith("#")) {
+        const text = trimmed.replace(/^#\s*/, "");
+        checkPageOverflow(15);
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(14);
+        doc.setTextColor(44, 94, 173);
+        doc.text(text, margin, yPosition);
+        yPosition += 9;
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(71, 85, 105);
+
+        let textToPrint = trimmed;
+        let leftOffset = margin;
+
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+          textToPrint = trimmed.replace(/^[-*]\s+/, "");
+          doc.text("o", margin, yPosition);
+          leftOffset = margin + 5;
+        } else {
+          const checklistMatch = trimmed.match(/^[-*]\s+\[([ xX])\]\s+(.*)/);
+          if (checklistMatch) {
+            const checked = checklistMatch[1].toLowerCase() === "x";
+            textToPrint = (checked ? "[X] " : "[ ] ") + checklistMatch[2];
+            leftOffset = margin + 2;
+          }
+        }
+
+        // Clean bold Markdown delimiters
+        textToPrint = textToPrint.replace(/\*\*/g, "");
+
+        const splitText = doc.splitTextToSize(textToPrint, pageWidth - leftOffset - margin);
+        checkPageOverflow(splitText.length * 5.2);
+        doc.text(splitText, leftOffset, yPosition);
+        yPosition += (splitText.length * 5.2);
+      }
+    });
+
+    const cleanName = meeting.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    doc.save(`${cleanName}-resumen.pdf`);
   };
 
   // Custom parser rendering Markdown to HTML neatly
@@ -273,7 +412,7 @@ ${meeting.transcript}
                     <div className="flex items-center space-x-2 text-[10px] text-slate-400 mt-1">
                       <span className="flex items-center">
                         <Calendar className="w-3 h-3 mr-0.5 shrink-0" />
-                        {new Date(meeting.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        {formatInUTC5(meeting.date, "shortDate")}
                       </span>
                       <span>•</span>
                       <span className="flex items-center">
@@ -338,7 +477,7 @@ ${meeting.transcript}
                 <div className="flex items-center space-x-4 text-[10px] text-slate-400 mt-2 font-medium">
                   <span className="flex items-center">
                     <Calendar className="w-3.5 h-3.5 mr-1" />
-                    {new Date(selectedMeeting.date).toLocaleString()}
+                    {formatInUTC5(selectedMeeting.date, "datetime")} (UTC-5)
                   </span>
                   <span className="flex items-center">
                     <Clock className="w-3.5 h-3.5 mr-1" />
@@ -367,6 +506,13 @@ ${meeting.transcript}
                   title="Export Obsidian Markdown (.md)"
                 >
                   <Download className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleExportPDF(selectedMeeting)}
+                  className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer"
+                  title="Descargar PDF (.pdf)"
+                >
+                  <FileText className="w-3.5 h-3.5 text-emerald-500" />
                 </button>
                 <button
                   onClick={() => handleExportJSON(selectedMeeting)}
@@ -412,18 +558,30 @@ ${meeting.transcript}
                 </button>
               </div>
 
-              {/* Copy action */}
-              <button
-                onClick={() =>
-                  handleCopyClipboard(
-                    activeTab === "summary" ? selectedMeeting.summary : selectedMeeting.transcript
-                  )
-                }
-                className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 flex items-center space-x-1.5 transition-colors cursor-pointer border border-slate-100"
-              >
-                {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                <span>{copied ? "Copied" : "Copy Content"}</span>
-              </button>
+              {/* Copy / PDF options */}
+              <div className="flex items-center space-x-2">
+                {activeTab === "summary" && (
+                  <button
+                    onClick={() => handleExportPDF(selectedMeeting)}
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100/90 rounded-lg text-[10px] font-bold text-emerald-600 flex items-center space-x-1.5 transition-colors cursor-pointer border border-emerald-100/50 shadow-xs"
+                    title="Descargar AI Summary Report (.pdf)"
+                  >
+                    <Download className="w-3 h-3 text-emerald-500 shrink-0" />
+                    <span>Descargar PDF</span>
+                  </button>
+                )}
+                <button
+                  onClick={() =>
+                    handleCopyClipboard(
+                      activeTab === "summary" ? selectedMeeting.summary : selectedMeeting.transcript
+                    )
+                  }
+                  className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 flex items-center space-x-1.5 transition-colors cursor-pointer border border-slate-100"
+                >
+                  {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? "Copied" : "Copy Content"}</span>
+                </button>
+              </div>
             </div>
 
             {/* Display notes area */}

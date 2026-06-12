@@ -5,6 +5,7 @@
 
 import React from "react";
 import { Meeting } from "../types";
+import { formatInUTC5 } from "../lib/dateUtils";
 import {
   Mic,
   Upload,
@@ -202,7 +203,7 @@ export default function Dashboard({
                   <div className="flex items-center space-x-3 text-[10px] text-slate-400 mt-1.5 font-medium">
                     <span className="flex items-center">
                       <Calendar className="w-3 h-3 mr-1 text-slate-400" />
-                      {new Date(meeting.date).toLocaleDateString()}
+                      {formatInUTC5(meeting.date, "date")}
                     </span>
                     <span className="flex items-center">
                       <Clock className="w-3 h-3 mr-1 text-slate-400" />

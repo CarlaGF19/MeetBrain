@@ -42,7 +42,7 @@ app.get("/api/health", (req, res) => {
 // Transcribe and analyze audio
 app.post("/api/transcribe", async (req, res): Promise<any> => {
   try {
-    const { audio, mimeType, aiProvider, promptOverride, apiKey } = req.body;
+    const { audio, mimeType, aiProvider, promptOverride, apiKey, liveDraftText } = req.body;
 
     if (!audio) {
       return res.status(400).json({ error: "Missing audio data in base64 format." });
@@ -74,10 +74,18 @@ app.post("/api/transcribe", async (req, res): Promise<any> => {
     }
 
     const systemPrompt = `You are MeetingBrain, an elite AI tool designed to transcribe recordings and output gorgeous Notion & Obsidian styled meeting summaries.
-Analyze the audio file provided and generate:
-1. Exact verbatim transcript. Ensure everything spoken is captured without paraphrasing.
-2. Obsidian-style summary featuring chapters with duration timestamps, clean outlines, and bulleted checklist tasks like [ ] or [x] for clear action items.
-3. A short, creative title summarizing the conversation.`;
+Analyze the audio file provided and generate the response in the language spoken in the audio.
+CRITICAL: If the language of the audio is Spanish, the 'title', 'transcript', and 'summary' MUST be generated entirely in Spanish. Do NOT translate Spanish speech or summaries into English. Default to Spanish when in doubt.
+
+Specifically, generate:
+1. Exact verbatim transcript in the native spoken language. EVERY sentence or speaker change MUST begin with a precise, chronological timestamp indicating exactly when it is spoken in the format '[MM:SS] Speaker: ...' (e.g., "[00:04] Speaker 1: Hola...", "[00:15] Speaker 2: Sí, claro..."). Detail the turns meticulously and timeline everything precisely.
+2. Obsidian-style summary in the native spoken language, featuring chapters with duration timestamps, clean outlines, and bulleted checklist tasks like [ ] or [x] for clear action items.
+3. A short, creative title in the native spoken language summarizing the conversation.`;
+
+    let userPrompt = promptOverride || "Realiza una transcripción precisa de este audio y presenta notas estructuradas en el mismo idioma en que se habla (por defecto, español si el audio es en español).";
+    if (liveDraftText && liveDraftText.trim().length > 0) {
+      userPrompt += `\n\nReference Live Speech Draft for context and text correction:\n"""\n${liveDraftText}\n"""\nUse the above draft to correct spelling of names or terms, alignment, and format the official transcription with precise timestamps from the audio file.`;
+    }
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -89,7 +97,7 @@ Analyze the audio file provided and generate:
           },
         },
         {
-          text: promptOverride || "Perform a precise transcription of this audio, and present structural meeting notes.",
+          text: userPrompt,
         },
       ],
       config: {
@@ -104,7 +112,7 @@ Analyze the audio file provided and generate:
             },
             transcript: {
               type: Type.STRING,
-              description: "Full, precise, verbatim transcript of everything spoken in the audio.",
+              description: "Full, precise, verbatim transcript of everything spoken in the audio, formatted with detailed chronological [MM:SS] speaker labels.",
             },
             summary: {
               type: Type.STRING,
