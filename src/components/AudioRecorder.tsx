@@ -403,40 +403,156 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
       });
       const base64Data = await base64Promise;
 
-      // 2. Call local `/api/transcribe` backend endpoint
-      setProcessingStatus("Transcribiendo y analizando con Gemini AI...");
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          audio: base64Data,
-          mimeType: blob.type || "audio/webm",
-          apiKey: settings.apiKey,
-          aiProvider: settings.aiProvider,
-          liveDraftText: liveTranscript,
-        }),
-      });
-
-      if (!response.ok) {
-        let errorMsg = "Fallo en la transcripción de audio.";
-        try {
-          const jsonError = await response.json();
-          errorMsg = jsonError.error || errorMsg;
-        } catch (e) {
-          // If the server returns HTML (e.g. Vercel timeout, serverless crash, or Cloud Run reverse proxy issue)
-          const rawText = await response.text();
-          if (rawText.includes("Payload Too Large") || response.status === 413) {
-            errorMsg = "El audio grabado es demasiado grande para enviarse en una sola transmisión. Te recomendamos grabar sesiones más cortas o fragmentar tu grabación en periodos de menor duración.";
-          } else if (response.status === 504 || response.status === 502) {
-            errorMsg = "La solicitud de transcripción de audio ha superado el tiempo máximo permitido por tu servidor o por la plataforma. Graba un audio más corto e inténtalo de nuevo.";
-          } else {
-            errorMsg = `Error de procesamiento en el servidor backend (Estado ${response.status}). Ponte en contacto con soporte si esto persiste. Detalle: ${rawText.substring(0, 120)}...`;
-          }
-        }
-        throw new Error(errorMsg);
+      // Proactively check audio size in client to avoid Vercel Serverless maximum 4.5MB payload limitations before sending
+      const payloadSizeBytes = base64Data.length;
+      if (payloadSizeBytes > 4.2 * 1024 * 1024) {
+        throw new Error(`El audio grabado es demasiado pesado (${(payloadSizeBytes / (1024 * 1024)).toFixed(2)} MB). Las funciones Serverless de Vercel limitan las transferencias de subida a un máximo de 4.5 MB. Te sugerimos realizar grabaciones más cortas (menos de 8-10 minutos) o dividir tu sesión.`);
       }
 
-      const json = await response.json();
+      // 2. Call local `/api/transcribe` backend endpoint or direct client call
+      let json;
+      const isCustomKeyValid = settings.apiKey && settings.apiKey.trim().startsWith("AIzaSy");
+
+      if (isCustomKeyValid && settings.aiProvider === "gemini") {
+        setProcessingStatus("Transcribiendo directamente en tu navegador con tu API Key (sin límite de servidor)...");
+        const systemPrompt = `You are MeetingBrain, an elite AI tool designed to transcribe recordings and output gorgeous Notion & Obsidian styled meeting summaries.
+Analyze the audio file provided and generate the response in the language spoken in the audio.
+CRITICAL: If the language of the audio is Spanish, the 'title', 'transcript', and 'summary' MUST be generated entirely in Spanish. Do NOT translate Spanish speech or summaries into English. Default to Spanish when in doubt.
+
+Specifically, generate:
+1. Exact verbatim transcript in the native spoken language. EVERY sentence or speaker change MUST begin with a precise, chronological timestamp indicating exactly when it is spoken in the format '[MM:SS] Speaker: ...' (e.g., "[00:04] Speaker 1: Hola...", "[00:15] Speaker 2: Sí, claro..."). Detail the turns meticulously and timeline everything precisely.
+2. Obsidian-style summary in the native spoken language, featuring chapters with duration timestamps, clean outlines, and bulleted checklist tasks like [ ] or [x] for clear action items.
+3. A short, creative title in the native spoken language summarizing the conversation.`;
+
+        let userPrompt = "Realiza una transcripción precisa de este audio y presenta notas estructuradas en el mismo idioma en que se habla (por defecto, español si el audio es en español).";
+        if (liveTranscript && liveTranscript.trim().length > 0) {
+          userPrompt += `\n\nReference Live Speech Draft for context and text correction:\n"""\n${liveTranscript}\n"""\nUse the above draft to correct spelling of names or terms, alignment, and format the official transcription with precise timestamps from the audio file.`;
+        }
+
+        // Clean base64 pattern (remove prefix if present)
+        let cleanBase64 = base64Data;
+        if (cleanBase64.includes(";base64,")) {
+          cleanBase64 = cleanBase64.split(";base64,")[1];
+        }
+
+        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${settings.apiKey.trim()}`;
+        const directResponse = await fetch(directUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: blob.type || "audio/webm",
+                      data: cleanBase64,
+                    },
+                  },
+                  {
+                    text: userPrompt,
+                  },
+                ],
+              },
+            ],
+            systemInstruction: {
+              parts: [
+                {
+                  text: systemPrompt,
+                },
+              ],
+            },
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  title: {
+                    type: "STRING",
+                    description: "Snappy, clean meeting title, e.g., 'Weekly Standup & Milestone Planning'.",
+                  },
+                  transcript: {
+                    type: "STRING",
+                    description: "Full, precise, verbatim transcript of everything spoken in the audio, formatted with detailed chronological [MM:SS] speaker labels.",
+                  },
+                  summary: {
+                    type: "STRING",
+                    description: "Fully styled Markdown summary with headings, key insights, bulleted points, and checklist items.",
+                  },
+                },
+                required: ["title", "transcript", "summary"],
+              },
+            },
+          }),
+        });
+
+        const directRawText = await directResponse.text();
+        if (!directResponse.ok) {
+          let errorDetail = directRawText;
+          try {
+            const errJson = JSON.parse(directRawText);
+            errorDetail = errJson.error?.message || errorDetail;
+          } catch (_) {
+            // ignore
+          }
+          throw new Error(`Error en llamada directa a Gemini desde navegador: ${errorDetail}`);
+        }
+
+        const directResult = JSON.parse(directRawText);
+        const textResponse = directResult.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!textResponse) {
+          throw new Error("No se recibió respuesta estructurada de la llamada directa.");
+        }
+
+        try {
+          json = JSON.parse(textResponse);
+        } catch (parseError) {
+          throw new Error("La respuesta directa de Gemini no contiene un JSON estructurado válido.");
+        }
+
+      } else {
+        setProcessingStatus("Transcribiendo y analizando con Gemini AI...");
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            audio: base64Data,
+            mimeType: blob.type || "audio/webm",
+            apiKey: settings.apiKey,
+            aiProvider: settings.aiProvider,
+            liveDraftText: liveTranscript,
+          }),
+        });
+
+        // Read response as text ONCE to avoid "body stream already read" and secure clean handling of server error text pages
+        const rawText = await response.text();
+
+        if (!response.ok) {
+          let errorMsg = "Fallo en la transcripción de audio.";
+          try {
+            // If the server sent standard JSON error response, use it
+            const jsonError = JSON.parse(rawText);
+            errorMsg = jsonError.error || errorMsg;
+          } catch (e) {
+            // Fallback to analyze raw HTML / text or custom status errors from proxy layers like Vercel/Cloud Run
+            if (rawText.includes("Payload Too Large") || response.status === 413) {
+              errorMsg = "El audio es demasiado pesado. Las funciones sin servidor de Vercel limitan las subida a 4.5 MB. Por favor realiza grabaciones de menor duración.";
+            } else if (response.status === 504 || response.status === 502 || rawText.toLowerCase().includes("timeout")) {
+              errorMsg = "La solicitud de transcripción con Gemini ha superado el tiempo límite de ejecución en Vercel (límite por defecto de 10-60 segundos). Intenta grabar un audio más corto.";
+            } else {
+              errorMsg = `Error en el servidor de transacciones (Estado ${response.status}). Detalle: ${rawText.substring(0, 150)}...`;
+            }
+          }
+          throw new Error(errorMsg);
+        }
+
+        // If OK, parse the raw text as JSON safely
+        try {
+          json = JSON.parse(rawText);
+        } catch (parseError) {
+          throw new Error(`El servidor respondió con código exitoso 200, pero la respuesta no es un JSON válido. Respuesta: ${rawText.substring(0, 120)}...`);
+        }
+      }
 
       setProcessingStatus("Generando resumen ejecutivo y tareas de Obsidian...");
       onTranscriptionSuccess(json, durationSec);
