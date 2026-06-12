@@ -417,11 +417,26 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
         }),
       });
 
-      const json = await response.json();
-
       if (!response.ok) {
-        throw new Error(json.error || "Fallo en la transcripción de audio.");
+        let errorMsg = "Fallo en la transcripción de audio.";
+        try {
+          const jsonError = await response.json();
+          errorMsg = jsonError.error || errorMsg;
+        } catch (e) {
+          // If the server returns HTML (e.g. Vercel timeout, serverless crash, or Cloud Run reverse proxy issue)
+          const rawText = await response.text();
+          if (rawText.includes("Payload Too Large") || response.status === 413) {
+            errorMsg = "El audio grabado es demasiado grande para enviarse en una sola transmisión. Te recomendamos grabar sesiones más cortas o fragmentar tu grabación en periodos de menor duración.";
+          } else if (response.status === 504 || response.status === 502) {
+            errorMsg = "La solicitud de transcripción de audio ha superado el tiempo máximo permitido por tu servidor o por la plataforma. Graba un audio más corto e inténtalo de nuevo.";
+          } else {
+            errorMsg = `Error de procesamiento en el servidor backend (Estado ${response.status}). Ponte en contacto con soporte si esto persiste. Detalle: ${rawText.substring(0, 120)}...`;
+          }
+        }
+        throw new Error(errorMsg);
       }
+
+      const json = await response.json();
 
       setProcessingStatus("Generando resumen ejecutivo y tareas de Obsidian...");
       onTranscriptionSuccess(json, durationSec);
