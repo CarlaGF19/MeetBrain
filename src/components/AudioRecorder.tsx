@@ -498,7 +498,12 @@ Specifically, generate:
           throw new Error(`Error en llamada directa a Gemini desde navegador: ${errorDetail}`);
         }
 
-        const directResult = JSON.parse(directRawText);
+        let directResult;
+        try {
+          directResult = JSON.parse(directRawText);
+        } catch (_) {
+          throw new Error(`Error en la respuesta de Gemini (no es JSON válido): ${directRawText.substring(0, 150)}...`);
+        }
         const textResponse = directResult.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!textResponse) {
           throw new Error("No se recibió respuesta estructurada de la llamada directa.");

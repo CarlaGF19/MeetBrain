@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 // Load environment variables (from .env/process.env)
 dotenv.config();
@@ -105,18 +105,18 @@ Specifically, generate:
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
             title: {
-              type: Type.STRING,
+              type: "STRING",
               description: "Snappy, clean meeting title, e.g., 'Weekly Standup & Milestone Planning'.",
             },
             transcript: {
-              type: Type.STRING,
+              type: "STRING",
               description: "Full, precise, verbatim transcript of everything spoken in the audio, formatted with detailed chronological [MM:SS] speaker labels.",
             },
             summary: {
-              type: Type.STRING,
+              type: "STRING",
               description: "Fully styled Markdown summary with headings, key insights, bulleted points, and checklist items.",
             },
           },
@@ -133,11 +133,19 @@ Specifically, generate:
     return res.json(result);
 
   } catch (error: any) {
-    console.error("Transcribe API Error:", error);
+    console.error("Transcribe API Error Details:", error);
     return res.status(500).json({
       error: error.message || "Failed to transcribe audio. Please verify your GEMINI_API_KEY is configured in Settings > Secrets.",
     });
   }
+});
+
+// Custom Express global error handler middleware to prevent plain HTML crashes and ensure tidy JSON error formats
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Global Handled Express Error:", err);
+  res.status(err.status || 500).json({
+    error: err.message || "An unexpected server-side error occurred in the MeetingBrain backend.",
+  });
 });
 
 // Configure Vite middleware or static serving
