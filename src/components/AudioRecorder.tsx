@@ -147,14 +147,26 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
       let stream: MediaStream;
       if (captureSource === "screen") {
         try {
-          const displayStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-              width: 1,
-              height: 1,
-              frameRate: 1
-            },
-            audio: true
-          });
+          let displayStream: MediaStream;
+          try {
+            displayStream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                displaySurface: "browser"
+              },
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+              } as any,
+              selfBrowserSurface: "exclude",
+              systemAudio: "include"
+            } as any);
+          } catch (e) {
+            displayStream = await navigator.mediaDevices.getDisplayMedia({
+              video: true,
+              audio: true
+            });
+          }
           
           const audioTracks = displayStream.getAudioTracks();
           if (audioTracks.length === 0) {
