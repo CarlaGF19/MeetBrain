@@ -17,6 +17,7 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 import { Meeting, AppSettings } from "../types";
+import { getIDBMeetings, saveIDBMeeting, deleteIDBMeeting } from "./indexedDb";
 
 // Collection paths
 const MEETINGS_COLLECTION = "meetings";
@@ -25,18 +26,12 @@ const SETTINGS_COLLECTION = "settings";
 export async function fetchUserMeetings(userId: string): Promise<Meeting[]> {
   const path = `${MEETINGS_COLLECTION} (query where ownerId == ${userId})`;
   
-  // 1. If local user, bypass Firestore and use direct localStorage
+  // 1. If local user, bypass Firestore and use direct IndexedDB
   if (userId.startsWith("local_")) {
-    try {
-      const localData = localStorage.getItem(`mb_vault_cache_${userId}`);
-      return localData ? JSON.parse(localData) : [];
-    } catch (e) {
-      console.error("Failed to read local meeting vault cache:", e);
-      return [];
-    }
+    return await getIDBMeetings(userId);
   }
 
-  // 2. Otherwise try Firestore with a secure local cache fallback
+  // 2. Otherwise try Firestore with a secure IndexedDB fallback
   try {
     const q = query(
       collection(db, MEETINGS_COLLECTION),
@@ -60,17 +55,14 @@ export async function fetchUserMeetings(userId: string): Promise<Meeting[]> {
       });
     });
     
-    // Cache successfully fetched meetings to survive offline/unverified sessions
-    localStorage.setItem(`mb_vault_cache_${userId}`, JSON.stringify(fetched));
+    // Cache successfully fetched meetings to survive offline/unverified sessions into IndexedDB to prevent 5MB localStorage limits
+    for (const meeting of fetched) {
+      await saveIDBMeeting(userId, meeting);
+    }
     return fetched;
   } catch (error) {
-    console.warn("Firestore list fetch failed (offline or permission required), loading cached vault:", error);
-    try {
-      const cachedData = localStorage.getItem(`mb_vault_cache_${userId}`);
-      return cachedData ? JSON.parse(cachedData) : [];
-    } catch (e) {
-      return [];
-    }
+    console.warn("Firestore list fetch failed (offline or permission required), loading from IndexedDB vault:", error);
+    return await getIDBMeetings(userId);
   }
 }
 
@@ -78,16 +70,11 @@ export async function saveMeetingToCloud(userId: string, meeting: Meeting): Prom
   const docId = meeting.id;
   const path = `${MEETINGS_COLLECTION}/${docId}`;
 
-  // 1. Instantly write to the local cache list to guarantee persistent storage
-  const cacheKey = `mb_vault_cache_${userId}`;
+  // 1. Instantly write to our IndexedDB client object store to prevent 5MB localStorage limits
   try {
-    const existingStr = localStorage.getItem(cacheKey);
-    let existingList: Meeting[] = existingStr ? JSON.parse(existingStr) : [];
-    existingList = existingList.filter((m) => m.id !== meeting.id);
-    existingList.unshift(meeting);
-    localStorage.setItem(cacheKey, JSON.stringify(existingList));
+    await saveIDBMeeting(userId, meeting);
   } catch (cacheErr) {
-    console.error("Local storage vault backup write failed:", cacheErr);
+    console.error("IndexedDB vault backup write failed:", cacheErr);
   }
 
   // 2. If simulated local user, avoid talking to Firestore
@@ -124,22 +111,15 @@ export async function updateMeetingInCloud(
 ): Promise<void> {
   const path = `${MEETINGS_COLLECTION}/${meetingId}`;
 
-  // 1. Sync local cache immediately
-  const cacheKey = `mb_vault_cache_${userId}`;
+  // 1. Sync local IndexedDB immediately
   try {
-    const existingStr = localStorage.getItem(cacheKey);
-    if (existingStr) {
-      const existingList: Meeting[] = JSON.parse(existingStr);
-      const updatedList = existingList.map((m) => {
-        if (m.id === meetingId) {
-          return { ...m, ...updates };
-        }
-        return m;
-      });
-      localStorage.setItem(cacheKey, JSON.stringify(updatedList));
+    const idbMeetings = await getIDBMeetings(userId);
+    const existing = idbMeetings.find((m) => m.id === meetingId);
+    if (existing) {
+      await saveIDBMeeting(userId, { ...existing, ...updates });
     }
   } catch (cacheErr) {
-    console.error("Failed to update status in local vault cache:", cacheErr);
+    console.error("Failed to update status in IndexedDB vault:", cacheErr);
   }
 
   // 2. Handle local simulated logins
@@ -183,17 +163,11 @@ export async function updateMeetingInCloud(
 export async function deleteMeetingFromCloud(userId: string, meetingId: string): Promise<void> {
   const path = `${MEETINGS_COLLECTION}/${meetingId}`;
 
-  // 1. Sync local cache immediately
-  const cacheKey = `mb_vault_cache_${userId}`;
+  // 1. Sync local IndexedDB immediately
   try {
-    const existingStr = localStorage.getItem(cacheKey);
-    if (existingStr) {
-      const existingList: Meeting[] = JSON.parse(existingStr);
-      const filteredList = existingList.filter((m) => m.id !== meetingId);
-      localStorage.setItem(cacheKey, JSON.stringify(filteredList));
-    }
+    await deleteIDBMeeting(meetingId);
   } catch (cacheErr) {
-    console.error("Failed to delete from local vault cache:", cacheErr);
+    console.error("Failed to delete from IndexedDB vault:", cacheErr);
   }
 
   // 2. Handle local simulated logins
