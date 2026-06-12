@@ -159,7 +159,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
           const audioTracks = displayStream.getAudioTracks();
           if (audioTracks.length === 0) {
             displayStream.getTracks().forEach((track) => track.stop());
-            throw new Error("No has marcado la opción 'Compartir audio' al seleccionar la pestaña. Inténtalo de nuevo y tilda 'Compartir audio' en la parte inferior izquierda.");
+            throw new Error("No has marcado la opción 'Compartir audio' o 'Compartir audio de la pestaña' al seleccionar. NOTA: Si estás usando una Mac (macOS), o si seleccionaste 'Toda la pantalla' o 'Ventana', el sistema oculta esta casilla. Para solucionarlo: Abre la reunión como pestaña de tu navegador, haz clic en Grabar, selecciona la pestaña 'Pestaña de Chrome' (arriba) y allí sí podrás marcar 'Compartir audio de la pestaña' (abajo a la izquierda).");
           }
           
           const videoTracks = displayStream.getVideoTracks();
@@ -538,17 +538,27 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
 
                 {captureSource === "screen" && (
                   <div className="mb-6 p-4 bg-sky-50 border border-sky-100 rounded-xl text-[11px] text-sky-700 max-w-md text-left leading-relaxed">
-                    <div className="font-bold flex items-center space-x-1.5 mb-1.5 text-sky-800">
+                    <div className="font-bold flex items-center space-x-1.5 mb-2 text-sky-800">
                       <Volume2 className="w-4 h-4 text-sky-600 shrink-0" />
-                      <span>¿Cómo transcribir mi otra pestaña/reunión?</span>
+                      <span>Guía para capturar Audio Digital (Reuniones)</span>
                     </div>
-                    Para capturar el audio de Google Meet, Zoom o Teams en otra pantalla o pestaña sin ruidos de fondo:
-                    <ol className="list-decimal pl-4 mt-1.5 space-y-1">
-                      <li>Haz clic en el botón de grabación abajo.</li>
-                      <li>Selecciona la pestaña donde tienes la reunión en vivo.</li>
-                      <li><span className="font-bold underline text-rose-600">Marca la casilla "Compartir audio de la pestaña"</span> (abajo a la izquierda del cuadro del navegador).</li>
-                      <li>Haz clic en Compartir y ¡listo! Grabará y transcribirá el audio interno completo.</li>
+                    <p className="mb-2">
+                      Para capturar el sonido del navegador sin ruidos de fondo, sigue estos pasos:
+                    </p>
+                    <ol className="list-decimal pl-4 space-y-1 mb-2">
+                      <li>Abre la reunión (Zoom web, Meet o Teams) en una <strong>Pestaña del Navegador</strong>.</li>
+                      <li>Presiona el botón de grabación abajo.</li>
+                      <li>En la ventana emergente, selecciona la pestaña superior llamada <strong className="text-indigo-700">"Pestaña de Chrome"</strong> (o "Pestaña de Edge/Brave").</li>
+                      <li>Selecciona la pestaña de tu reunión y <strong className="underline text-rose-600">marca la casilla "Compartir audio de la pestaña"</strong> en la esquina inferior izquierda.</li>
+                      <li>Haz clic en <strong>Compartir</strong>.</li>
                     </ol>
+                    <div className="mt-2.5 pt-2 border-t border-sky-200/50 text-[10.5px] text-amber-700 bg-amber-50/50 -mx-4 -mb-4 p-3 rounded-b-xl">
+                      <span className="font-bold">⚠️ ¿No te aparece la opción de compartir audio?</span>
+                      <ul className="list-disc pl-4 mt-1 space-y-1">
+                        <li><strong>Si estás en Mac (macOS):</strong> Apple bloquea la grabación de audio de toda la pantalla o de ventanas de programas de escritorio. <strong>La opción de audio solo aparecerá si compartes una "Pestaña de Chrome/Navegador"</strong>.</li>
+                        <li><strong>Reuniones en Apps de escritorio (Zoom/Teams instalados):</strong> El navegador no puede capturar su sonido interno directamente. Te recomendamos abrir estas reuniones usando su versión web en el navegador.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
                 

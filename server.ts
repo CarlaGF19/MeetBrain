@@ -159,11 +159,15 @@ async function configureServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`MeetingBrain Server fully operational at http://localhost:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`MeetingBrain Server fully operational at http://localhost:${PORT}`);
+    });
+  }
 }
 
 configureServer().catch((err) => {
   console.error("Failed to start server entrypoint:", err);
 });
+
+export default app;
