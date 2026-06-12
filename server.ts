@@ -52,7 +52,9 @@ app.post("/api/transcribe", async (req, res): Promise<any> => {
     const cleanMimeType = mimeType || "audio/wav";
     
     // Resolve which API key to use - request's configured key overrides process.env
-    const resolvedApiKey = apiKey || process.env.GEMINI_API_KEY;
+    // Only use custom client key if it looks like a valid Gemini Key (starts with AIzaSy)
+    const isCustomKeyValid = apiKey && apiKey.trim().startsWith("AIzaSy");
+    const resolvedApiKey = isCustomKeyValid ? apiKey.trim() : process.env.GEMINI_API_KEY;
     if (!resolvedApiKey) {
       throw new Error("GEMINI_API_KEY is not defined. Please verify it is set in Workspace Settings or in your environment secrets.");
     }

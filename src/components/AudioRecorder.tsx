@@ -24,10 +24,28 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
   const [captureSource, setCaptureSource] = useState<"mic" | "screen">("mic");
+  const [isFirefox, setIsFirefox] = useState(false);
+  const [isSafari, setIsSafari] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && navigator.userAgent) {
+      const ua = navigator.userAgent.toLowerCase();
+      setIsFirefox(ua.includes("firefox"));
+      setIsSafari(/^((?!chrome|android).)*safari/i.test(ua));
+    }
+  }, []);
 
   // Live real-time speech states
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
+
+  // Cumulative speech recognition trackers
+  const sessionFinalTranscriptRef = useRef("");
+  const liveTranscriptRef = useRef("");
+  const [failedSessionData, setFailedSessionData] = useState<{
+    transcript: string;
+    durationSec: number;
+  } | null>(null);
 
   // Refs for audio capturing
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -39,6 +57,11 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
   const animationFrameRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const recognitionRef = useRef<any>(null);
+  const stopRecordingRef = useRef<() => void>();
+
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+  });
 
   // File Upload states
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -137,10 +160,16 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
 
   // 2. Control Handlers for Live Voice Recording
   const startRecording = async () => {
+    // Clean up any existing records, streams or timers to avoid leaks and duplicate sharing banners
+    stopTracksAndTimers();
+
     setErrorMessage("");
     setDuration(0);
+    sessionFinalTranscriptRef.current = "";
+    liveTranscriptRef.current = "";
     setLiveTranscript("");
     setInterimTranscript("");
+    setFailedSessionData(null);
     audioChunksRef.current = [];
 
     try {
@@ -171,11 +200,39 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
           const audioTracks = displayStream.getAudioTracks();
           if (audioTracks.length === 0) {
             displayStream.getTracks().forEach((track) => track.stop());
-            throw new Error("No has marcado la opción 'Compartir audio' o 'Compartir audio de la pestaña' al seleccionar. NOTA: Si estás usando una Mac (macOS), o si seleccionaste 'Toda la pantalla' o 'Ventana', el sistema oculta esta casilla. Para solucionarlo: Abre la reunión como pestaña de tu navegador, haz clic en Grabar, selecciona la pestaña 'Pestaña de Chrome' (arriba) y allí sí podrás marcar 'Compartir audio de la pestaña' (abajo a la izquierda).");
+            if (isFirefox) {
+              throw new Error("Estás usando Firefox. Tu navegador no cuenta con soporte técnico para capturar sonido digital interno del sistema o de las pestañas en tu sistema operativo. Puedes cambiar a 'Mi Micrófono' (arriba) y subir el volumen de tus altavoces para grabarlo, o ingresar desde Google Chrome / Microsoft Edge.");
+            } else if (isSafari) {
+              throw new Error("Estás usando Safari. Safari restringe la captura digital de audio interno del sistema. Te recomendamos usar Google Chrome, o bien activar 'Mi Micrófono' con el sonido de los altavoces de tu Mac lo suficientemente alto.");
+            } else {
+              throw new Error("No has marcado la opción 'Compartir audio' o 'Compartir audio de la pestaña' al seleccionar. NOTA: Si estás usando una Mac (macOS), o si seleccionaste 'Toda la pantalla' o 'Ventana', el sistema oculta esta casilla. Para solucionarlo: Abre la reunión como pestaña de tu navegador, haz clic en Grabar, selecciona la pestaña 'Pestaña de Chrome' (arriba) y allí sí podrás marcar 'Compartir audio de la pestaña' (abajo a la izquierda).");
+            }
           }
           
+          // Escuchar cuando el usuario hace clic en el botón nativo de "Dejar de compartir" del navegador para finalizar grabación limpiamente
+          audioTracks.forEach((track) => {
+            track.onended = () => {
+              if (stopRecordingRef.current) {
+                stopRecordingRef.current();
+              }
+            };
+          });
+
           const videoTracks = displayStream.getVideoTracks();
-          videoTracks.forEach((track) => track.stop());
+          // Retrasamos la detención de la pista de video unos instantes (350ms) para darle
+          // tiempo al navegador (como Chrome o Edge) de posicionar y renderizar su barra
+          // informativa de forma correcta, evitando el error visual de doble pestaña "laggeada" o solapada.
+          setTimeout(() => {
+            videoTracks.forEach((track) => {
+              try {
+                if (track.readyState === "live") {
+                  track.stop();
+                }
+              } catch (err) {
+                console.warn("No se pudo detener la pista de video de forma segura:", err);
+              }
+            });
+          }, 350);
           
           stream = new MediaStream(audioTracks);
         } catch (err: any) {
@@ -225,20 +282,20 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
         recognition.lang = "es-ES";
 
         recognition.onresult = (event: any) => {
-          let finalTranscript = "";
+          let currentSessionFinal = "";
           let currentInterim = "";
 
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
+          for (let i = 0; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript + " ";
+              currentSessionFinal += event.results[i][0].transcript + " ";
             } else {
               currentInterim += event.results[i][0].transcript;
             }
           }
 
-          if (finalTranscript) {
-            setLiveTranscript((prev) => prev + finalTranscript);
-          }
+          const fullText = (sessionFinalTranscriptRef.current + currentSessionFinal).trim() + " ";
+          setLiveTranscript(fullText);
+          liveTranscriptRef.current = fullText;
           setInterimTranscript(currentInterim);
         };
 
@@ -247,6 +304,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
         };
 
         recognition.onend = () => {
+          // Capture cumulative text from this session before restarting
+          sessionFinalTranscriptRef.current = liveTranscriptRef.current;
+
           // Restart recognition if recording is still active to avoid timeout stops
           if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording" && !isPaused) {
             try {
@@ -369,6 +429,12 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
     } catch (err: any) {
       console.error("Transcription error details:", err);
       setErrorMessage(err.message || "No se pudo procesar el audio.");
+      if (liveTranscript && liveTranscript.trim().length > 0) {
+        setFailedSessionData({
+          transcript: liveTranscript,
+          durationSec,
+        });
+      }
     } finally {
       setIsProcessing(false);
       setProcessingStatus("");
@@ -492,12 +558,57 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-xs font-medium text-rose-600 flex items-start space-x-3"
+            className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-xs font-medium text-rose-600 flex items-start space-x-3 text-left"
           >
             <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold">Acoustic Guard: </span>
-              {errorMessage}
+            <div className="flex-1">
+              <div>
+                <span className="font-bold">Acoustic Guard: </span>
+                {errorMessage}
+              </div>
+              
+              {errorMessage.includes("Firefox") || errorMessage.includes("Safari") || errorMessage.includes("Compartir audio") ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCaptureSource("mic");
+                      setErrorMessage("");
+                    }}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Usar Mi Micrófono en su lugar</span>
+                  </button>
+                </div>
+              ) : null}
+
+              {failedSessionData && (
+                <div className="mt-4 p-4 bg-indigo-50/70 border border-indigo-100/80 rounded-xl text-left">
+                  <p className="text-xs text-indigo-950 font-bold mb-1 flex items-center space-x-1.5">
+                    <span className="text-sm">💡</span>
+                    <span>¡No has perdido tu transcripción!</span>
+                  </p>
+                  <p className="text-[11px] text-indigo-700 leading-relaxed mb-3">
+                    Aunque el análisis en la nube falló, el sistema transcribió con éxito <strong>{failedSessionData.transcript.split(/\s+/).filter(Boolean).length} palabras</strong> en vivo. Presiona el botón de abajo para guardarla como respaldo en tu historial.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onTranscriptionSuccess({
+                        title: `Respaldo: Conversación ${new Date().toLocaleDateString()}`,
+                        transcript: failedSessionData.transcript,
+                        summary: `### Transcripción en Vivo de Respaldo\n\nEsta nota se recuperó de forma segura de tu sesión en tiempo real.\n\n${failedSessionData.transcript}`
+                      }, failedSessionData.durationSec);
+                      setFailedSessionData(null);
+                      setErrorMessage("");
+                    }}
+                    className="inline-flex items-center space-x-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
+                  >
+                    <span>Guardar Transcripción de Respaldo</span>
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -550,6 +661,35 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings }: Audi
 
                 {captureSource === "screen" && (
                   <div className="mb-6 p-4 bg-sky-50 border border-sky-100 rounded-xl text-[11px] text-sky-700 max-w-md text-left leading-relaxed">
+                    
+                    {isFirefox && (
+                      <div className="mb-3.5 p-3 bg-red-50 border border-red-200/60 rounded-lg text-[10.5px] text-red-900 leading-normal">
+                        <div className="font-bold flex items-center space-x-1 mb-1 text-red-950">
+                          <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                          <span>Firefox No Permite Audio Digital</span>
+                        </div>
+                        Estás usando <strong>Firefox</strong>. Por limitaciones de Mozilla, no se permite capturar audio interno de pestañas. Te sugerimos:
+                        <ul className="list-disc pl-3.5 mt-1 space-y-0.5 font-medium">
+                          <li>Usa <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong> para capturar digitalmente.</li>
+                          <li>O haz clic para <span className="underline text-indigo-700 font-bold hover:text-indigo-900 cursor-pointer" onClick={() => setCaptureSource("mic")}>Usar Mi Micrófono</span>.</li>
+                        </ul>
+                      </div>
+                    )}
+
+                    {isSafari && (
+                      <div className="mb-3.5 p-3 bg-red-50 border border-red-200/60 rounded-lg text-[10.5px] text-red-900 leading-normal">
+                        <div className="font-bold flex items-center space-x-1 mb-1 text-red-950">
+                          <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                          <span>Safari No Permite Audio Digital</span>
+                        </div>
+                        Estás usando <strong>Safari</strong>. Por restricciones de Apple, no se permite capturar audio digital interno. Te sugerimos:
+                        <ul className="list-disc pl-3.5 mt-1 space-y-0.5 font-medium">
+                          <li>Usa <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong> para capturar digitalmente.</li>
+                          <li>O haz clic para <span className="underline text-indigo-700 font-bold hover:text-indigo-900 cursor-pointer" onClick={() => setCaptureSource("mic")}>Usar Mi Micrófono</span>.</li>
+                        </ul>
+                      </div>
+                    )}
+
                     <div className="font-bold flex items-center space-x-1.5 mb-2 text-sky-800">
                       <Volume2 className="w-4 h-4 text-sky-600 shrink-0" />
                       <span>Guía para capturar Audio Digital (Reuniones)</span>
