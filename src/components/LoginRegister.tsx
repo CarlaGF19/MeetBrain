@@ -16,8 +16,9 @@ import {
   FileText, 
   Bot, 
   Lock, 
-  CornerDownRight, 
+  ShieldCheck,
   CheckCircle,
+  ArrowRight,
   Cpu
 } from "lucide-react";
 
@@ -29,8 +30,6 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-
-
 
   const handleGoogleOAuth = async () => {
     setIsLoading(true);
@@ -46,200 +45,237 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
       onLoginSuccess({
         uid: firebaseUser.uid,
         email: firebaseUser.email || "username45usario@gmail.com",
-        displayName: firebaseUser.displayName || "Usuario Brain",
+        displayName: firebaseUser.displayName || "Usuario Olli",
         photoURL: firebaseUser.photoURL || undefined,
       });
     } catch (err: any) {
       console.error("Firebase Google Auth failed:", err);
       
-      // Check for blocked environments or generic popup-closed errors
       if (err.code === "auth/popup-closed-by-user") {
-        setError("La ventana de autenticación fue cerrada antes de completar.");
+        setError("La ventana de autenticación fue cerrada antes de completarla.");
       } else {
         setError(err.message || "Fallo inesperado al conectar con Google.");
       }
 
-      // Proactively prompt user about allowing popups
-      setInfoMessage("Asegúrate de habilitar las ventanas emergentes (popups) en tu navegador para iniciar sesión segura con Google.");
+      setInfoMessage("Asegúrate de permitir las ventanas emergentes (popups) en tu navegador para iniciar sesión segura.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div id="login_screen_wrapper" className="min-h-screen w-full bg-[#FAF9F5] flex items-stretch justify-center select-none font-sans relative overflow-hidden">
+    <div id="login_screen_wrapper" className="min-h-screen w-full bg-[#f7f9fb] flex items-stretch justify-center select-none font-sans relative overflow-hidden">
       
-      {/* Brand Background Elements */}
-      <div className="absolute top-[-100px] left-[-100px] w-96 h-96 bg-[#C4E2F5]/25 rounded-full filter blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-120px] right-[-100px] w-[500px] h-[500px] bg-[#f472b6]/8 rounded-full filter blur-[150px] pointer-events-none" />
+      {/* Decorative Brand Light Orbs representing Lumina Ambient Glow */}
+      <div className="absolute top-[-80px] left-[-80px] w-96 h-96 bg-[#004ac6]/5 rounded-full filter blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[-100px] right-[-100px] w-[450px] h-[450px] bg-[#fea619]/4 rounded-full filter blur-[120px] pointer-events-none" />
 
-      {/* Main Container - FULL SCREEN split layout occupies 100% of physical viewport */}
+      {/* Main Container with 12 Column Layout */}
       <motion.div
         id="desktop_login_card"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.4 }}
-        className="w-full min-h-screen bg-white overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="w-full min-h-screen bg-[#f7f9fb] overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10"
       >
         
-        {/* LEFT COLUMN (7 Cols) - Product value description & Features */}
-        <div className="lg:col-span-7 bg-[#FAF9F6]/60 border-r border-[#E9E9EB] p-8 sm:p-16 flex flex-col justify-center relative overflow-hidden">
+        {/* LEFT COLUMN (7 Cols) - Lumina Branding & Interactive Highlights */}
+        <div className="lg:col-span-7 bg-[#ffffff] border-r border-[#eceef0] p-8 sm:p-16 flex flex-col justify-between relative overflow-y-auto">
           
-          <div className="max-w-2xl mx-auto w-full">
-            {/* Logo logotype & Project Tagline */}
-            <div className="flex items-center gap-2 mb-8 text-left">
-              <div className="flex items-center justify-center gap-0.5 shrink-0">
-                <span className="w-2.5 h-6 rounded-full bg-[#135bf1]" />
-                <span className="w-2.5 h-4 rounded-full bg-[#135bf1]/60" />
-                <span className="w-2.5 h-5 rounded-full bg-[#135bf1]/80" />
-              </div>
-              <span className="font-bold text-2xl tracking-tighter text-[#111111] font-sans flex items-center">
-                olli<span className="text-[#135bf1] ml-[1px]">.</span>
+          {/* Header Brand */}
+          <div className="flex items-center gap-2 text-left mb-8 lg:mb-0">
+            <div className="flex items-center justify-center gap-1 shrink-0">
+              <span className="w-1.5 h-6 rounded-full bg-[#004ac6] animate-[pulse_2s_infinite]" />
+              <span className="w-1.5 h-4 rounded-full bg-[#004ac6]/60 animate-[pulse_1.5s_infinite]" />
+              <span className="w-1.5 h-5 rounded-full bg-[#004ac6]/80 animate-[pulse_1.8s_infinite]" />
+            </div>
+            <div>
+              <span className="font-display font-extrabold text-2xl tracking-tighter text-[#191c1e] flex items-center">
+                Olli<span className="text-[#004ac6] ml-[1px] font-extrabold">.</span>
               </span>
             </div>
+          </div>
 
-            {/* Product Title Banner */}
-            <div className="text-left">
-              <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
-                El motor inteligente de minutas que convierte tus reuniones en apuntes de valor.
-              </h1>
-              <p className="text-sm text-slate-500 mt-3 leading-relaxed">
-                Transcribe conferencias, organiza planes de acción, y debate acuerdos directamente con Olli, tu copiloto de IA con total privacidad.
-              </p>
+          {/* Main Info Hero */}
+          <div className="max-w-xl mx-auto w-full my-auto py-10 text-left">
+            
+            {/* Minimalist Pill Accent */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#2563eb]/8 border border-[#2563eb]/15 text-[#004ac6] text-xs font-semibold mb-6">
+              <Cpu className="w-3.5 h-3.5" />
+              <span>Transcriptor de Reuniones Avanzado</span>
             </div>
 
-            {/* Core Feature Grid - PROVING THE STUFF WHAT THIS APP DOES! */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-10 text-left relative z-10">
+            {/* Title corresponding to Headline-LG */}
+            <h1 className="font-display text-3xl sm:text-[34px] font-extrabold text-[#191c1e] tracking-tight leading-[40px] sm:leading-[44px]">
+              Revoluciona tus reuniones con <span className="text-[#004ac6] relative inline-block">inteligencia pura.</span>
+            </h1>
+
+            {/* Body Description corresponding to Body-LG */}
+            <p className="font-sans text-base text-[#434655] font-normal mt-4 leading-relaxed max-w-lg">
+              Transforma el caos en claridad. Olli estructura tus conversaciones directamente en decisiones y planes de acción procesables al instante. No vuelvas a perder un solo detalle de tus juntas de trabajo.
+            </p>
+
+            {/* Feature Bento Grid with standard (Level 1) & AI-Tinted Surfaces */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-10">
               
-              <div className="p-5 bg-white/70 backdrop-blur-md rounded-2xl border border text-slate-900 border-[#E9E9EB] hover:shadow-2xs transition-all">
-                <div className="w-8 h-8 rounded-xl bg-[#135bf1]/10 flex items-center justify-center text-[#135bf1] mb-2.5">
-                  <Mic className="w-4 h-4" />
+              {/* Feature 1: Live Record (Level 1 Card, white with soft shadow) */}
+              <div className="p-5 bg-white rounded-2xl border border-[#e2e8f0] shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-lg bg-[#004ac6]/8 flex items-center justify-center text-[#004ac6] mb-3">
+                  <Mic className="w-5 h-5" />
                 </div>
-                <h4 className="text-xs font-bold">Grabación & Transcripción en Vivo</h4>
-                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                  Speech-to-text inteligente en tiempo real asistido por IA para capturar cada idea clave sin cortes.
+                <h3 className="font-display text-sm font-semibold text-[#191c1e]">Captura Precisa</h3>
+                <p className="font-sans text-[12px] text-[#434655] mt-1 leading-normal">
+                  Grabación instantánea y transcripción automática en tiempo real de voz alta fidelidad.
                 </p>
               </div>
 
-              <div className="p-5 bg-white/70 backdrop-blur-md rounded-2xl border border text-slate-900 border-[#E9E9EB] hover:shadow-2xs transition-all">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 mb-2.5">
-                  <FileText className="w-4 h-4" />
+              {/* Feature 2: Structured Document (Level 1 Card) */}
+              <div className="p-5 bg-white rounded-2xl border border-[#e2e8f0] shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-lg bg-[#004ac6]/8 flex items-center justify-center text-[#004ac6] mb-3">
+                  <FileText className="w-5 h-5" />
                 </div>
-                <h4 className="text-xs font-bold">Bóveda Inteligente Estructurada</h4>
-                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                  Generación instantánea de actas ejecutivas estructuradas en Markdown con listas de tareas marcables.
+                <h3 className="font-display text-sm font-semibold text-[#191c1e]">Síntesis Automática</h3>
+                <p className="font-sans text-[12px] text-[#434655] mt-1 leading-normal">
+                  Minutas con formatos perfectos en Markdown con asignación inteligente de tareas.
                 </p>
               </div>
 
-              <div className="p-5 bg-white/70 backdrop-blur-md rounded-2xl border border text-slate-900 border-[#E9E9EB] hover:shadow-2xs transition-all">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 mb-2.5">
-                  <Bot className="w-4 h-4" />
+              {/* Feature 3: Copilot (AI-Tinted Surface - light amber background and alert highlights) */}
+              <div className="p-5 bg-[#fffbeb] rounded-2xl border border-[#fef3c7] shadow-[0_4px_12px_rgba(254,166,25,0.03)] hover:shadow-[0_4px_16px_rgba(254,166,25,0.07)] transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-[#fea619]/15 text-[#855300] text-[9.5px] font-bold uppercase tracking-wider">
+                  Sugerido
                 </div>
-                <h4 className="text-xs font-bold">Copiloto Integrado (Ask Olli Chat)</h4>
-                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                  Interroga directamente a la transcripción. Extrae decisiones, planes de acción y temas complejos de inmediato.
+                <div className="w-9 h-9 rounded-lg bg-[#fea619]/14 flex items-center justify-center text-[#fea619] mb-3">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <h3 className="font-display text-sm font-semibold text-[#855300]">Copiloto Conversacional</h3>
+                <p className="font-sans text-[12px] text-[#855300]/90 mt-1 leading-normal">
+                  Chatea con tus transcripciones de audio para extraer insights estratégicos en segundos.
                 </p>
               </div>
 
-              <div className="p-5 bg-white/70 backdrop-blur-md rounded-2xl border border text-slate-900 border-[#E9E9EB] hover:shadow-2xs transition-all">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 mb-2.5">
-                  <Lock className="w-4 h-4" />
+              {/* Feature 4: High Reliability Protection (Level 1 Card) */}
+              <div className="p-5 bg-white rounded-2xl border border-[#e2e8f0] shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-lg bg-[#006242]/8 flex items-center justify-center text-[#006242] mb-3">
+                  <ShieldCheck className="w-5 h-5" />
                 </div>
-                <h4 className="text-xs font-bold">Total Privacidad de Datos</h4>
-                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                  Proyecto de código abierto. Tu base de datos y tus transcripciones se almacenan de manera privada y segura.
+                <h3 className="font-display text-sm font-semibold text-[#191c1e]">Seguridad Absoluta</h3>
+                <p className="font-sans text-[12px] text-[#434655] mt-1 leading-normal">
+                  Infraestructura segura administrada de extremo a extremo sin almacenamiento público.
                 </p>
               </div>
 
             </div>
           </div>
 
+          {/* Footer Metadata removed per user request */}
+
         </div>
 
-        {/* RIGHT COLUMN (5 Cols) - Secure Google Login Gateway, clean & minimalist design without mascots */}
-        <div className="lg:col-span-5 p-8 sm:p-16 flex flex-col justify-center items-stretch bg-white relative">
+        {/* RIGHT COLUMN (5 Cols) - Clean Minimalist Google Authentication Terminal (Tonal Layer 2 Card) */}
+        <div className="lg:col-span-5 p-8 sm:p-16 flex flex-col justify-center items-stretch bg-[#f7f9fb] relative">
           
-          {/* Middle Section - Form Credentials / OAuth Gateway */}
-          <div className="my-auto text-center flex flex-col justify-center max-w-sm mx-auto w-full">
+          <div className="my-auto max-w-sm mx-auto w-full">
             
-            {/* Elegant tiny lock illustration block to complement typography */}
-            <div className="w-12 h-12 bg-[#135bf1]/5 border border-[#135bf1]/12 rounded-2xl flex items-center justify-center text-[#135bf1] mt-2 mb-5 mx-auto shadow-3xs">
-              <Lock className="w-5 h-5" />
-            </div>
-
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">
-              Ingresa a tu Espacio Seguro
-            </h2>
-            <p className="text-xs text-slate-500 mt-1.5 max-w-sm mx-auto leading-relaxed">
-              Utiliza un método seguro para acceder a tu panel. Tus grabaciones de audio y notas se mantendrán sincronizadas de forma privada.
-            </p>
-
-            <div className="space-y-3 mt-8 w-full">
+            {/* Level 2 Login Portal Card */}
+            <div className="bg-white rounded-2xl border border-[#eceef0] p-8 shadow-[0_12px_32px_rgba(0,0,0,0.03)] text-center relative overflow-hidden">
               
-              {/* Google OAuth Login Button */}
-              <motion.button
-                type="button"
-                id="google_signin_btn"
-                onClick={handleGoogleOAuth}
-                disabled={isLoading}
-                whileTap={{ scale: 0.98 }}
-                className="w-full bg-[#FFFFFF] hover:bg-slate-50 text-black font-bold py-3.5 px-6 rounded-full border-[1.5px] border-[#E9E9EB] shadow-xs flex items-center justify-center gap-2.5 transition-all text-xs cursor-pointer select-none disabled:opacity-75"
-              >
-                {isLoading && !error ? (
-                  <span className="border-2 border-[#111111]/20 border-t-[#111111] rounded-full w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                      <path
-                        fill="#EA4335"
-                        d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.14-5.136 4.14-3.41 0-6.173-2.784-6.173-6.225s2.763-6.226 6.173-6.226c1.55 0 2.96.568 4.05 1.503l3.056-3.055C19.123 2.115 15.935 1 12.24 1 6.13 1 1.135 6 1.135 12.16s4.996 11.16 11.105 11.16c6.07 0 10.99-4.8 10.99-11.16 0-.6-.051-1.2-.162-1.875H12.24z"
-                      />
-                    </svg>
-                    <span>Iniciar sesión con Google</span>
-                  </>
-                )}
-              </motion.button>
+              {/* Top Accent line or indicator */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-[#004ac6]" />
+
+              {/* Secure lock illustration tailored to Lumina System specs */}
+              <div className="w-12 h-12 bg-[#004ac6]/10 rounded-xl flex items-center justify-center text-[#004ac6] mb-5 mx-auto shadow-xs">
+                <Lock className="w-5 h-5 text-[#004ac6]" />
+              </div>
+
+              {/* High Contrast Headings */}
+              <h2 className="font-display text-xl font-bold text-[#191c1e] tracking-tight">
+                Acceso Restringido
+              </h2>
+              <p className="font-sans text-xs text-[#434655] mt-2 leading-relaxed">
+                Ingresa para sincronizar tus espacios de trabajo y continuar donde lo dejaste.
+              </p>
+
+              <div className="mt-8 space-y-4">
+                
+                {/* Main Google Sign-In Button (Solid Action Blue as per Buttons Token) */}
+                <motion.button
+                  type="button"
+                  id="google_signin_btn"
+                  onClick={handleGoogleOAuth}
+                  disabled={isLoading}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full bg-[#004ac6] hover:bg-[#003ea8] text-white font-semibold py-3 px-5 rounded-lg shadow-sm flex items-center justify-center gap-3 transition-colors text-xs cursor-pointer select-none disabled:opacity-75 h-11"
+                >
+                  {isLoading ? (
+                    <span className="border-2 border-white/20 border-t-white rounded-full w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <div className="w-5 h-5 rounded bg-white flex items-center justify-center shrink-0">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                          <path
+                            fill="#EA4335"
+                            d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.14-5.136 4.14-3.41 0-6.173-2.784-6.173-6.225s2.763-6.226 6.173-6.226c1.55 0 2.96.568 4.05 1.503l3.056-3.055C19.123 2.115 15.935 1 12.24 1 6.13 1 1.135 6 1.135 12.16s4.996 11.16 11.105 11.16c6.07 0 10.99-4.8 10.99-11.16 0-.6-.051-1.2-.162-1.875H12.24z"
+                          />
+                        </svg>
+                      </div>
+                      <span>Iniciar sesión con Google</span>
+                    </>
+                  )}
+                </motion.button>
+
+                {/* Simulated Secondary action as a blueprint element */}
+                <div className="text-center pt-2">
+                  <span className="text-[10px] text-[#737686] font-medium leading-normal block">
+                    ¿No tienes una cuenta corporativa? <br/>
+                    <span className="text-[#004ac6] hover:underline cursor-pointer">Consulta con administración</span>
+                  </span>
+                </div>
+
+              </div>
+
+              {/* Alert Status for interactive experiences */}
+              <div className="min-h-[40px] mt-6 flex items-center justify-center">
+                <AnimatePresence mode="wait">
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="bg-[#ba1a1a]/5 border border-[#ba1a1a]/15 rounded-lg p-3 text-[11px] font-medium text-[#ba1a1a] flex items-start space-x-2 text-left w-full"
+                    >
+                      <AlertCircle className="w-4 h-4 text-[#ba1a1a] shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </motion.div>
+                  )}
+
+                  {!error && infoMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="bg-[#004ac6]/5 border border-[#eceef0] rounded-lg p-3 text-[11px] font-medium text-[#004ac6] flex items-start space-x-2 text-left w-full"
+                    >
+                      <Info className="w-4 h-4 text-[#004ac6] shrink-0 mt-0.5" />
+                      <span>{infoMessage}</span>
+                    </motion.div>
+                  )}
+
+                  {!error && !infoMessage && (
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 0.7 }}
+                      className="text-[10px] text-[#737686] font-medium leading-relaxed block"
+                    >
+                      🔐 Autenticación segura gestionada a través de Google. Tus datos están protegidos.
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
 
             </div>
 
-            {/* Custom Error & Helper Status Overlay panels */}
-            <div className="min-h-[50px] mt-6 flex items-center justify-center px-1.5">
-              <AnimatePresence mode="wait">
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="bg-red-50 border border-red-100 rounded-xl p-2.5 text-[10.5px] font-medium text-red-600 flex items-start space-x-1.5 text-left w-full"
-                  >
-                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
-                    <span>{error}</span>
-                  </motion.div>
-                )}
-
-                {!error && infoMessage && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="bg-[#135bf1]/5 border border-[#135bf1]/12 rounded-xl p-2.5 text-[10px] font-medium text-[#135bf1] flex items-start space-x-1.5 text-left w-full"
-                  >
-                    <Info className="w-3.5 h-3.5 text-[#135bf1] shrink-0 mt-0.5" />
-                    <span>{infoMessage}</span>
-                  </motion.div>
-                )}
-
-                {!error && !infoMessage && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 0.6 }}
-                    className="text-[10px] text-[#80807C] font-semibold leading-normal block"
-                  >
-                    🔐 Tus credenciales de acceso son procesadas de extremo a extremo a través del servicio oficial de Google Authentication.
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </div>
+            {/* Mobile Footer Metadata removed per user request */}
 
           </div>
 

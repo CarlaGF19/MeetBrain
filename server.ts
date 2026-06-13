@@ -5,6 +5,15 @@ import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import nodemailer from "nodemailer";
 
+function isValidGeminiApiKey(key: string | undefined): boolean {
+  if (!key) return false;
+  const cleanKey = key.trim();
+  if (cleanKey === "" || cleanKey.toUpperCase() === "MY_GEMINI_API_KEY" || cleanKey.length < 10) {
+    return false;
+  }
+  return true;
+}
+
 // Load environment variables (from .env/process.env)
 dotenv.config();
 
@@ -53,12 +62,12 @@ app.post("/api/transcribe", async (req, res): Promise<any> => {
     const cleanMimeType = mimeType || "audio/wav";
     
     // Resolve which API key to use - request's configured key overrides process.env
-    // Only use custom client key if it looks like a valid Gemini Key (starts with AIzaSy)
-    const isCustomKeyValid = apiKey && apiKey.trim().startsWith("AIzaSy");
+    // Only use custom client key if it is non-empty and valid
+    const isCustomKeyValid = isValidGeminiApiKey(apiKey);
     const resolvedApiKey = isCustomKeyValid ? apiKey.trim() : process.env.GEMINI_API_KEY;
-    if (!resolvedApiKey || resolvedApiKey === "MY_GEMINI_API_KEY" || !resolvedApiKey.trim().startsWith("AIzaSy")) {
+    if (!isValidGeminiApiKey(resolvedApiKey)) {
       return res.status(400).json({
-        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key (debe comenzar con 'AIzaSy') en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
+        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
       });
     }
 
@@ -156,11 +165,11 @@ app.post("/api/summarize-text", async (req, res): Promise<any> => {
     }
 
     // Resolve which API key to use
-    const isCustomKeyValid = apiKey && apiKey.trim().startsWith("AIzaSy");
+    const isCustomKeyValid = isValidGeminiApiKey(apiKey);
     const resolvedApiKey = isCustomKeyValid ? apiKey.trim() : process.env.GEMINI_API_KEY;
-    if (!resolvedApiKey || resolvedApiKey === "MY_GEMINI_API_KEY" || !resolvedApiKey.trim().startsWith("AIzaSy")) {
+    if (!isValidGeminiApiKey(resolvedApiKey)) {
       return res.status(400).json({
-        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key (debe comenzar con 'AIzaSy') en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
+        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
       });
     }
 
@@ -235,11 +244,11 @@ app.post("/api/chat", async (req, res): Promise<any> => {
       return res.status(400).json({ error: "No se proporcionó un mensaje del usuario." });
     }
 
-    const isCustomKeyValid = apiKey && apiKey.trim().startsWith("AIzaSy");
+    const isCustomKeyValid = isValidGeminiApiKey(apiKey);
     const resolvedApiKey = isCustomKeyValid ? apiKey.trim() : process.env.GEMINI_API_KEY;
-    if (!resolvedApiKey || resolvedApiKey === "MY_GEMINI_API_KEY" || !resolvedApiKey.trim().startsWith("AIzaSy")) {
+    if (!isValidGeminiApiKey(resolvedApiKey)) {
       return res.status(400).json({
-        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key (debe comenzar con 'AIzaSy') en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
+        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
       });
     }
 

@@ -1,33 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@305;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Custom color classes or variables to reference the specific colors */
+/* Custom color classes or variables for Lumina AI Design System */
 :root {
-  --color-primary: #2C5EAD;
-  --color-secondary: #1591DC;
-  --color-accent: #4BB8FA;
-  --color-light-blue: #C4E2F5;
-  --font-sans: "Poppins", sans-serif;
+  --color-lumina-surface: #f7f9fb;
+  --color-lumina-surface-dim: #d8dadc;
+  --color-lumina-surface-bright: #f7f9fb;
+  --color-lumina-surface-lowest: #ffffff;
+  --color-lumina-surface-low: #f2f4f6;
+  --color-lumina-surface-container: #eceef0;
+  --color-lumina-surface-high: #e6e8ea;
+  --color-lumina-surface-highest: #e0e3e5;
+  --color-lumina-on-surface: #191c1e;
+  --color-lumina-on-surface-variant: #434655;
+  --color-lumina-inverse-surface: #2d3133;
+  --color-lumina-inverse-on-surface: #eff1f3;
+  --color-lumina-outline: #737686;
+  --color-lumina-outline-variant: #c3c6d7;
+  --color-lumina-surface-tint: #0053db;
+  --color-lumina-primary: #004ac6;
+  --color-lumina-on-primary: #ffffff;
+  --color-lumina-primary-container: #2563eb;
+  --color-lumina-on-primary-container: #eeefff;
+  --color-lumina-inverse-primary: #b4c5ff;
+  --color-lumina-secondary: #855300;
+  --color-lumina-on-secondary: #ffffff;
+  --color-lumina-secondary-container: #fea619;
+  --color-lumina-on-secondary-container: #684000;
+  --color-lumina-tertiary: #006242;
+  --color-lumina-on-tertiary: #ffffff;
+  --color-lumina-tertiary-container: #007d55;
+  --color-lumina-on-tertiary-container: #bdffdb;
+  --color-lumina-error: #ba1a1a;
+  --color-lumina-on-error: #ffffff;
+  --color-lumina-error-container: #ffdad6;
+  --color-lumina-on-error-container: #93000a;
 }
 
 body {
-  font-family: var(--font-sans);
-  background-color: #fcfcfd;
-  color: #1e293b;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--color-lumina-surface);
+  color: var(--color-lumina-on-surface);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Enforce Poppins globally to fulfill the absolute font requirement across all widgets */
+/* Enforce Inter globally for standard typography */
 *, *::before, *::after {
-  font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Preserve JetBrains Mono for code blocks, elements with font-mono tailwind class or within pre tags */
+/* Enforce Manrope for display headings */
+h1, h2, h3, h4, h5, h6, .font-display, .font-display * {
+  font-family: "Manrope", sans-serif !important;
+}
+
+/* Preserve JetBrains Mono for code blocks */
 code, pre, kbd, samp, .font-mono, .font-mono * {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace !important;
 }

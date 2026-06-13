@@ -231,6 +231,13 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const recognitionRef = useRef<any>(null);
   const stopRecordingRef = useRef<() => void>();
 
+  const durationRef = useRef(0);
+  const captureSourceRef = useRef<"mic" | "screen">("mic");
+
+  useEffect(() => {
+    captureSourceRef.current = captureSource;
+  }, [captureSource]);
+
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
   });
@@ -354,6 +361,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     setErrorMessage("");
     setSpeechErrorNotice(null);
     setDuration(0);
+    durationRef.current = 0;
     sessionFinalTranscriptRef.current = "";
     liveTranscriptRef.current = "";
     setLiveTranscript("");
@@ -467,9 +475,17 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       };
 
       mediaRecorder.onstop = async () => {
-        // Direct recording uses real-time Web Speech API live text.
-        // As requested ('no guardaremos audio'), we avoid processing and uploading raw audio files to save storage and bypass server limits.
-        console.log("Audio preservation disabled: live speech-to-text text-draft used instead.");
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const finalTranscript = liveTranscriptRef.current || "";
+        const dur = durationRef.current || 0;
+        
+        if (captureSourceRef.current === "screen" || !finalTranscript.trim()) {
+          console.log("Screen capture or missing live transcript. Using server-side Gemini audio transcription...");
+          await handleAudioProcess(audioBlob, dur);
+        } else {
+          console.log("Using live speech-to-text text-draft for summarizing.");
+          await handleTextProcess(finalTranscript, dur);
+        }
       };
 
       mediaRecorderRef.current = mediaRecorder;
@@ -558,6 +574,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       timerIntervalRef.current = setInterval(() => {
         setDuration((prev) => {
           const next = prev + 1;
+          durationRef.current = next;
           // Synchronize to the cloud every 20 minutes (20 * 60 = 1200 seconds)
           if (next % 1200 === 0 && onUpdateDraft && currentDraftIdRef.current) {
             setIsSyncingDraft(true);
@@ -720,8 +737,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         }, 800);
       }
 
-      // Directly process and summarize the live collected transcript text
-      handleTextProcess(finalTranscript, duration);
+      // Set processing feedback immediately, handleTextProcess or handleAudioProcess will overwrite visual statuses momentarily
+      setIsProcessing(true);
+      setProcessingStatus("Deteniendo grabación y preparando recopilación de audio...");
     }
   };
 
