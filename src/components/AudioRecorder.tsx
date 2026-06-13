@@ -431,22 +431,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
             };
           });
 
-          const videoTracks = displayStream.getVideoTracks();
-          // Retrasamos la detención de la pista de video unos instantes (350ms) para darle
-          // tiempo al navegador (como Chrome o Edge) de posicionar y renderizar su barra
-          // informativa de forma correcta, evitando el error visual de doble pestaña "laggeada" o solapada.
-          setTimeout(() => {
-            videoTracks.forEach((track) => {
-              try {
-                if (track.readyState === "live") {
-                  track.stop();
-                }
-              } catch (err) {
-                console.warn("No se pudo detener la pista de video de forma segura:", err);
-              }
-            });
-          }, 350);
-          
+          streamRef.current = displayStream; // Guardamos el displayStream original para poder apagar tanto el video como el audio al finalizar
           stream = new MediaStream(audioTracks);
         } catch (err: any) {
           if (err.name === "NotAllowedError" || err.message?.includes("Permission denied")) {
@@ -456,8 +441,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         }
       } else {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
       }
-      streamRef.current = stream;
 
       // Instantiate HTML MediaRecorder
       const options = { mimeType: "audio/webm" };
