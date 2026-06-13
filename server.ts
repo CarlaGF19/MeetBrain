@@ -56,8 +56,10 @@ app.post("/api/transcribe", async (req, res): Promise<any> => {
     // Only use custom client key if it looks like a valid Gemini Key (starts with AIzaSy)
     const isCustomKeyValid = apiKey && apiKey.trim().startsWith("AIzaSy");
     const resolvedApiKey = isCustomKeyValid ? apiKey.trim() : process.env.GEMINI_API_KEY;
-    if (!resolvedApiKey) {
-      throw new Error("GEMINI_API_KEY is not defined. Please verify it is set in Workspace Settings or in your environment secrets.");
+    if (!resolvedApiKey || resolvedApiKey === "MY_GEMINI_API_KEY" || !resolvedApiKey.trim().startsWith("AIzaSy")) {
+      return res.status(400).json({
+        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key (debe comenzar con 'AIzaSy') en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
+      });
     }
 
     // Create a dynamic client for this request using the resolved key
@@ -156,8 +158,10 @@ app.post("/api/summarize-text", async (req, res): Promise<any> => {
     // Resolve which API key to use
     const isCustomKeyValid = apiKey && apiKey.trim().startsWith("AIzaSy");
     const resolvedApiKey = isCustomKeyValid ? apiKey.trim() : process.env.GEMINI_API_KEY;
-    if (!resolvedApiKey) {
-      throw new Error("GEMINI_API_KEY is not defined. Please verify it is set in Workspace Settings or in your environment secrets.");
+    if (!resolvedApiKey || resolvedApiKey === "MY_GEMINI_API_KEY" || !resolvedApiKey.trim().startsWith("AIzaSy")) {
+      return res.status(400).json({
+        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key (debe comenzar con 'AIzaSy') en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
+      });
     }
 
     const ai = new GoogleGenAI({
@@ -179,13 +183,7 @@ Specifically, generate:
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
-      contents: {
-        parts: [
-          {
-            text: `Por favor resume la siguiente transcripción en español:\n\n${transcript}`,
-          },
-        ],
-      },
+      contents: `Por favor resume la siguiente transcripción en español:\n\n${transcript}`,
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
@@ -239,8 +237,10 @@ app.post("/api/chat", async (req, res): Promise<any> => {
 
     const isCustomKeyValid = apiKey && apiKey.trim().startsWith("AIzaSy");
     const resolvedApiKey = isCustomKeyValid ? apiKey.trim() : process.env.GEMINI_API_KEY;
-    if (!resolvedApiKey) {
-      throw new Error("GEMINI_API_KEY is not defined. Please verify it is set in Workspace Settings or in your environment secrets.");
+    if (!resolvedApiKey || resolvedApiKey === "MY_GEMINI_API_KEY" || !resolvedApiKey.trim().startsWith("AIzaSy")) {
+      return res.status(400).json({
+        error: "No se ha configurado una API Key de Gemini válida. Por favor, ingresa tu API Key (debe comenzar con 'AIzaSy') en la sección de configuración lateral (Settings -> API Configuration) o configúrala en Google AI Studio (añadiendo GEMINI_API_KEY como secret)."
+      });
     }
 
     const ai = new GoogleGenAI({

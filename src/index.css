@@ -22,6 +22,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Enforce Poppins globally to fulfill the absolute font requirement across all widgets */
+*, *::before, *::after {
+  font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Preserve JetBrains Mono for code blocks, elements with font-mono tailwind class or within pre tags */
+code, pre, kbd, samp, .font-mono, .font-mono * {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace !important;
+}
+
 /* Custom scrollbar to match minimalist aesthetic */
 ::-webkit-scrollbar {
   width: 6px;

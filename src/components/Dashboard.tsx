@@ -50,7 +50,7 @@ export default function Dashboard({
   );
 
   return (
-    <div className="space-y-6 font-sans text-left max-w-5xl mx-auto pb-12 select-none">
+    <div className="space-y-6 font-sans text-left max-w-[1700px] xl:max-w-full mx-auto pb-12 select-none">
       
       {/* 1. TOP BAR SEARCH & DISPATCH */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-4 border-b border-[#EBEBEB]">

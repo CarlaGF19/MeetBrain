@@ -202,6 +202,18 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   // Cumulative speech recognition trackers
   const sessionFinalTranscriptRef = useRef("");
   const liveTranscriptRef = useRef("");
+  const [speechErrorNotice, setSpeechErrorNotice] = useState<string | null>(null);
+  const isRecordingRef = useRef(false);
+  const isPausedRef = useRef(false);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
   const [failedSessionData, setFailedSessionData] = useState<{
     transcript: string;
     durationSec: number;
@@ -340,6 +352,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     stopTracksAndTimers();
 
     setErrorMessage("");
+    setSpeechErrorNotice(null);
     setDuration(0);
     sessionFinalTranscriptRef.current = "";
     liveTranscriptRef.current = "";
@@ -497,17 +510,35 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
         recognition.onerror = (e: any) => {
           console.warn("Speech recognition error:", e);
+          if (e.error === "not-allowed") {
+            setSpeechErrorNotice(
+              "⚠️ Permiso de micrófono denegado para la transcripción en vivo por voz. " +
+              "Asegúrate de conceder permisos al micrófono en la barra de direcciones. " +
+              "Si tienes problemas debido al marco integrado (iframe) de AI Studio, haz clic en el botón 'Abrir en pestaña nueva' " +
+              "(flecha diagonal arriba a la derecha, en la parte superior del navegador) para correr el sistema en pantalla completa sin restricciones."
+            );
+          } else if (e.error === "network") {
+            setSpeechErrorNotice("⚠️ Error de conexión / red en el reconocimiento de voz en vivo.");
+          } else if (e.error !== "no-speech" && e.error !== "aborted") {
+            setSpeechErrorNotice(`⚠️ El reconocimiento de voz encontró una dificultad técnica (${e.error}).`);
+          }
         };
 
         recognition.onend = () => {
           // Capture cumulative text from this session before restarting
           sessionFinalTranscriptRef.current = liveTranscriptRef.current;
 
-          // Restart recognition if recording is still active to avoid timeout stops
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording" && !isPaused) {
-            try {
-              recognition.start();
-            } catch (err) {}
+          // Restart recognition if recording is still active to avoid timeout stops, using setTimeout for clean shutdown
+          if (isRecordingRef.current && !isPausedRef.current) {
+            setTimeout(() => {
+              try {
+                if (recognitionRef.current && isRecordingRef.current && !isPausedRef.current) {
+                  recognition.start();
+                }
+              } catch (err) {
+                console.warn("Speech recognition restart failed:", err);
+              }
+            }, 300);
           }
         };
 
@@ -517,6 +548,10 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         } catch (e) {
           console.error("Speech recognition start failed:", e);
         }
+      } else {
+        setSpeechErrorNotice(
+          "⚠️ Tu navegador no tiene soporte nativo para el reconocimiento de voz en vivo (Web Speech API). Te recomendamos usar Google Chrome o Microsoft Edge."
+        );
       }
 
       // Setup active ticking counter
@@ -1045,7 +1080,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
       {/* Mode Renderers */}
       {activeMode === "record" ? (
-        <div className="flex flex-col items-center justify-center py-6 text-center">
+        <div className="w-full py-2">
           
           <AnimatePresence mode="wait">
             {!isRecording ? (
@@ -1054,115 +1089,164 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="flex flex-col items-center"
+                className="w-full text-left"
               >
-                <div className="text-slate-400 text-xs tracking-wider font-semibold uppercase mb-3">
-                  Fuente de Captura de Audio
-                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch w-full mb-2">
+                  
+                  {/* LEFT COLUMN: TRIGGER AND MODE OPTIONS */}
+                  <div className="lg:col-span-7 flex flex-col items-center justify-center bg-slate-50/25 border border-slate-100 rounded-3xl p-6 sm:p-8 text-center relative shadow-3xs">
+                    <div className="text-slate-400 text-xs tracking-wider font-semibold uppercase mb-3">
+                      Fuente de Captura de Audio
+                    </div>
 
-                {/* Audio Capture Source Selector */}
-                <div className="flex bg-slate-100 p-1 rounded-xl mb-5 space-x-1 max-w-sm w-full">
-                  <button
-                    type="button"
-                    onClick={() => setCaptureSource("mic")}
-                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      captureSource === "mic"
-                        ? "bg-white text-[#2C5EAD] shadow-sm"
-                        : "text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    <Mic className="w-3.5 h-3.5" />
-                    <span>Mi Micrófono</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCaptureSource("screen")}
-                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
-                      captureSource === "screen"
-                        ? "bg-white text-[#2C5EAD] shadow-sm"
-                        : "text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    <Tv className="w-3.5 h-3.5" />
-                    <span>Audio de Reunión (Digital)</span>
-                  </button>
-                </div>
+                    {/* Audio Capture Source Selector */}
+                    <div className="flex bg-slate-100 p-1 rounded-xl mb-5 space-x-1 max-w-sm w-full">
+                      <button
+                        type="button"
+                        onClick={() => setCaptureSource("mic")}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                          captureSource === "mic"
+                            ? "bg-white text-[#2C5EAD] shadow-sm"
+                            : "text-slate-500 hover:text-slate-700"
+                        }`}
+                      >
+                        <Mic className="w-3.5 h-3.5" />
+                        <span>Mi Micrófono</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCaptureSource("screen")}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                          captureSource === "screen"
+                            ? "bg-white text-[#2C5EAD] shadow-sm"
+                            : "text-slate-500 hover:text-slate-700"
+                        }`}
+                      >
+                        <Tv className="w-3.5 h-3.5" />
+                        <span>Audio de Reunión (Digital)</span>
+                      </button>
+                    </div>
 
-                {captureSource === "screen" && (
-                  <div className="mb-6 p-4 bg-sky-50 border border-sky-100 rounded-xl text-[11px] text-sky-700 max-w-md text-left leading-relaxed">
+                    {captureSource === "screen" && (
+                      <div className="mb-6 p-4 bg-sky-50 border border-sky-100 rounded-xl text-[11px] text-sky-700 max-w-md text-left leading-relaxed">
+                        
+                        {isFirefox && (
+                          <div className="mb-3.5 p-3 bg-red-50 border border-red-200/60 rounded-lg text-[10.5px] text-red-900 leading-normal">
+                            <div className="font-bold flex items-center space-x-1 mb-1 text-red-950">
+                              <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                              <span>Firefox No Permite Audio Digital</span>
+                            </div>
+                            Estás usando <strong>Firefox</strong>. Por limitaciones de Mozilla, no se permite capturar audio interno de pestañas. Te sugerimos:
+                            <ul className="list-disc pl-3.5 mt-1 space-y-0.5 font-medium">
+                              <li>Usa <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong> para capturar digitalmente.</li>
+                              <li>O haz clic para <span className="underline text-indigo-700 font-bold hover:text-indigo-900 cursor-pointer" onClick={() => setCaptureSource("mic")}>Usar Mi Micrófono</span>.</li>
+                            </ul>
+                          </div>
+                        )}
+
+                        {isSafari && (
+                          <div className="mb-3.5 p-3 bg-red-50 border border-red-200/60 rounded-lg text-[10.5px] text-red-900 leading-normal">
+                            <div className="font-bold flex items-center space-x-1 mb-1 text-red-950">
+                              <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                              <span>Safari No Permite Audio Digital</span>
+                            </div>
+                            Estás usando <strong>Safari</strong>. Por restricciones de Apple, no se permite capturar audio digital interno. Te sugerimos:
+                            <ul className="list-disc pl-3.5 mt-1 space-y-0.5 font-medium">
+                              <li>Usa <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong> para capturar digitalmente.</li>
+                              <li>O haz clic para <span className="underline text-indigo-700 font-bold hover:text-indigo-900 cursor-pointer" onClick={() => setCaptureSource("mic")}>Usar Mi Micrófono</span>.</li>
+                            </ul>
+                          </div>
+                        )}
+
+                        <div className="font-bold flex items-center space-x-1.5 mb-2 text-sky-800">
+                          <Volume2 className="w-4 h-4 text-sky-600 shrink-0" />
+                          <span>Guía para capturar Audio Digital (Reuniones)</span>
+                        </div>
+                        <p className="mb-2">
+                          Para capturar el sonido del navegador sin ruidos de fondo, sigue estos pasos:
+                        </p>
+                        <ol className="list-decimal pl-4 space-y-1 mb-2">
+                          <li>Abre la reunión (Zoom web, Meet o Teams) en una <strong>Pestaña del Navegador</strong>.</li>
+                          <li>Presiona el botón de grabación abajo.</li>
+                          <li>En la ventana emergente, selecciona la pestaña superior llamada <strong className="text-indigo-700">"Pestaña de Chrome"</strong> (o "Pestaña de Edge/Brave").</li>
+                          <li>Selecciona la pestaña de tu reunión y <strong className="underline text-rose-600">marca la casilla "Compartir audio de la pestaña"</strong> en la esquina inferior izquierda.</li>
+                          <li>Haz clic en <strong>Compartir</strong>.</li>
+                        </ol>
+                        <div className="mt-2.5 pt-2 border-t border-sky-200/50 text-[10.5px] text-amber-700 bg-amber-50/50 -mx-4 -mb-4 p-3 rounded-b-xl">
+                          <span className="font-bold">⚠️ ¿No te aparece la opción de compartir audio?</span>
+                          <ul className="list-disc pl-4 mt-1 space-y-1">
+                            <li><strong>Si estás en Mac (macOS):</strong> Apple bloquea la grabación de audio de toda la pantalla o de ventanas de programas de escritorio. <strong>La opción de audio solo aparecerá si compartes una "Pestaña de Chrome/Navegador"</strong>.</li>
+                            <li><strong>Reuniones en Apps de escritorio (Zoom/Teams instalados):</strong> El navegador no puede capturar su sonido interno directamente. Te recomendamos abrir estas reuniones usando su versión web en el navegador.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                     
-                    {isFirefox && (
-                      <div className="mb-3.5 p-3 bg-red-50 border border-red-200/60 rounded-lg text-[10.5px] text-red-900 leading-normal">
-                        <div className="font-bold flex items-center space-x-1 mb-1 text-red-950">
-                          <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                          <span>Firefox No Permite Audio Digital</span>
-                        </div>
-                        Estás usando <strong>Firefox</strong>. Por limitaciones de Mozilla, no se permite capturar audio interno de pestañas. Te sugerimos:
-                        <ul className="list-disc pl-3.5 mt-1 space-y-0.5 font-medium">
-                          <li>Usa <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong> para capturar digitalmente.</li>
-                          <li>O haz clic para <span className="underline text-indigo-700 font-bold hover:text-indigo-900 cursor-pointer" onClick={() => setCaptureSource("mic")}>Usar Mi Micrófono</span>.</li>
-                        </ul>
+                    {/* Visual recording trigger button */}
+                    <button
+                      onClick={startRecording}
+                      disabled={isProcessing}
+                      className="w-24 h-24 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform cursor-pointer hover:bg-slate-100/50 relative shadow-sm group disabled:opacity-50 mt-2"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#2C5EAD] to-[#1591DC] flex items-center justify-center text-white shadow-md shadow-[#2C5EAD]/20 group-hover:shadow-lg transition-all">
+                        {captureSource === "screen" ? <Tv className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
                       </div>
-                    )}
-
-                    {isSafari && (
-                      <div className="mb-3.5 p-3 bg-red-50 border border-red-200/60 rounded-lg text-[10.5px] text-red-900 leading-normal">
-                        <div className="font-bold flex items-center space-x-1 mb-1 text-red-950">
-                          <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                          <span>Safari No Permite Audio Digital</span>
-                        </div>
-                        Estás usando <strong>Safari</strong>. Por restricciones de Apple, no se permite capturar audio digital interno. Te sugerimos:
-                        <ul className="list-disc pl-3.5 mt-1 space-y-0.5 font-medium">
-                          <li>Usa <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong> para capturar digitalmente.</li>
-                          <li>O haz clic para <span className="underline text-indigo-700 font-bold hover:text-indigo-900 cursor-pointer" onClick={() => setCaptureSource("mic")}>Usar Mi Micrófono</span>.</li>
-                        </ul>
-                      </div>
-                    )}
-
-                    <div className="font-bold flex items-center space-x-1.5 mb-2 text-sky-800">
-                      <Volume2 className="w-4 h-4 text-sky-600 shrink-0" />
-                      <span>Guía para capturar Audio Digital (Reuniones)</span>
-                    </div>
-                    <p className="mb-2">
-                      Para capturar el sonido del navegador sin ruidos de fondo, sigue estos pasos:
+                    </button>
+                    
+                    <h3 className="text-base font-bold text-[#2C5EAD] mt-5">
+                      {captureSource === "screen" ? "Grabar Audio Digital" : "Grabar por Micrófono"}
+                    </h3>
+                    <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
+                      {captureSource === "screen" 
+                        ? "Presiona el botón para seleccionar la pestaña y capturar el audio digital en vivo."
+                        : "Presiona el botón para iniciar la captura usando tu micrófono ambiental."
+                      }
                     </p>
-                    <ol className="list-decimal pl-4 space-y-1 mb-2">
-                      <li>Abre la reunión (Zoom web, Meet o Teams) en una <strong>Pestaña del Navegador</strong>.</li>
-                      <li>Presiona el botón de grabación abajo.</li>
-                      <li>En la ventana emergente, selecciona la pestaña superior llamada <strong className="text-indigo-700">"Pestaña de Chrome"</strong> (o "Pestaña de Edge/Brave").</li>
-                      <li>Selecciona la pestaña de tu reunión y <strong className="underline text-rose-600">marca la casilla "Compartir audio de la pestaña"</strong> en la esquina inferior izquierda.</li>
-                      <li>Haz clic en <strong>Compartir</strong>.</li>
-                    </ol>
-                    <div className="mt-2.5 pt-2 border-t border-sky-200/50 text-[10.5px] text-amber-700 bg-amber-50/50 -mx-4 -mb-4 p-3 rounded-b-xl">
-                      <span className="font-bold">⚠️ ¿No te aparece la opción de compartir audio?</span>
-                      <ul className="list-disc pl-4 mt-1 space-y-1">
-                        <li><strong>Si estás en Mac (macOS):</strong> Apple bloquea la grabación de audio de toda la pantalla o de ventanas de programas de escritorio. <strong>La opción de audio solo aparecerá si compartes una "Pestaña de Chrome/Navegador"</strong>.</li>
-                        <li><strong>Reuniones en Apps de escritorio (Zoom/Teams instalados):</strong> El navegador no puede capturar su sonido interno directamente. Te recomendamos abrir estas reuniones usando su versión web en el navegador.</li>
-                      </ul>
+                  </div>
+
+                  {/* RIGHT COLUMN: QUICK BENCHMARKS & BEST PRACTICES */}
+                  <div className="lg:col-span-5 flex flex-col justify-between bg-gradient-to-br from-slate-50/50 to-white border border-slate-100/90 rounded-3xl p-6 sm:p-8 text-left relative shadow-3xs">
+                    <div>
+                      <div className="text-[#2C5EAD] text-[10px] tracking-wider font-extrabold uppercase mb-2 flex items-center space-x-1">
+                        <Sparkles className="w-3.5 h-3.5 text-[#1591DC]" />
+                        <span>Tecnología olli.</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-800 mb-4">Optimizado para clases y conferencias</h4>
+                      
+                      <div className="space-y-4">
+                        <div className="flex items-start space-x-3">
+                          <div className="p-2 bg-indigo-50 rounded-xl text-indigo-650 shrink-0 text-sm">🔒</div>
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-800">Almacenamiento Privado Cifrado</h5>
+                            <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">Tus grabaciones y resúmenes se guardan en el navegador de manera segura. Nadie más tiene acceso a tus clases.</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3">
+                          <div className="p-2 bg-amber-50 rounded-xl text-amber-650 shrink-0 text-sm">⚡</div>
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-800">Copiloto Inteligente de Estudio</h5>
+                            <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">La inteligencia artificial reconoce automáticamente las preguntas del docente y te ayuda a resolver dudas en vivo.</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3">
+                          <div className="p-2 bg-emerald-50 rounded-xl text-emerald-650 shrink-0 text-sm">🎧</div>
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-800">Acoustic Guard Activo</h5>
+                            <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">El sistema limpia los ruidos de fondo y ecos para brindarte la mejor precisión posible en la transcripción de voz.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-slate-100/80 flex items-center justify-between text-[9px] text-slate-450 font-bold uppercase tracking-wider">
+                      <span>Vault Status: Protegido</span>
+                      <span className="text-[#2C5EAD]">Offline-First</span>
                     </div>
                   </div>
-                )}
-                
-                {/* Visual recording trigger button */}
-                <button
-                  onClick={startRecording}
-                  disabled={isProcessing}
-                  className="w-24 h-24 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform cursor-pointer hover:bg-slate-100/50 relative shadow-sm group disabled:opacity-50 mt-2"
-                >
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#2C5EAD] to-[#1591DC] flex items-center justify-center text-white shadow-md shadow-[#2C5EAD]/20 group-hover:shadow-lg transition-all">
-                    {captureSource === "screen" ? <Tv className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
-                  </div>
-                </button>
-                
-                <h3 className="text-base font-bold text-[#2C5EAD] mt-5">
-                  {captureSource === "screen" ? "Grabar Audio Digital" : "Grabar por Micrófono"}
-                </h3>
-                <p className="text-xs text-slate-400 max-w-xs mt-1 leading-relaxed">
-                  {captureSource === "screen" 
-                    ? "Presiona el botón para seleccionar la pestaña y capturar el audio digital en vivo."
-                    : "Presiona el botón para iniciar la captura usando tu micrófono ambiental."
-                  }
-                </p>
+
+                </div>
               </motion.div>
             ) : (
               <motion.div
@@ -1240,7 +1324,13 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                               Canal de Audio Directo / Clase
                             </p>
                             
-                            <div className="text-sm text-slate-800 font-normal leading-relaxed font-sans whitespace-pre-wrap select-text">
+                            <div className="text-sm text-slate-800 font-normal leading-relaxed font-sans whitespace-pre-wrap select-text animate-fade-in">
+                              {speechErrorNotice && (
+                                <div className="mb-4 p-3 bg-rose-50 border border-rose-100/90 rounded-xl text-[11px] font-semibold text-rose-600 flex items-start space-x-2">
+                                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                                  <span className="flex-1">{speechErrorNotice}</span>
+                                </div>
+                              )}
                               {liveTranscript || interimTranscript ? (
                                 <div className="space-y-1 bg-transparent pr-1">
                                   <span className="text-slate-800 font-normal">{liveTranscript}</span>
@@ -1476,71 +1566,116 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         </div>
       ) : (
         <div className="py-2">
-          {/* Audio Upload Pane */}
-          <div
-            onDragEnter={handleDrag}
-            onDragOver={handleDrag}
-            onDragLeave={handleDrag}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed border-slate-200 hover:border-[#1591DC] hover:bg-slate-50/50 rounded-2xl py-12 px-6 text-center cursor-pointer transition-all ${
-              dragActive ? "border-[#2C5EAD] bg-[#2C5EAD]/5" : ""
-            }`}
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept=".mp3,.wav,.m4a,audio/*"
-              className="hidden"
-            />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch w-full mb-2">
             
-            <div className="w-12 h-12 rounded-full bg-[#1591DC]/5 flex items-center justify-center text-[#1591DC] mx-auto mb-4">
-              <UploadCloud className="w-6 h-6" />
+            {/* LEFT COLUMN: FILE DROP ZONE */}
+            <div className="lg:col-span-7 flex flex-col justify-center">
+              <div
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed border-slate-200 hover:border-[#1591DC] hover:bg-slate-50/50 rounded-3xl py-14 px-6 text-center cursor-pointer transition-all ${
+                  dragActive ? "border-[#2C5EAD] bg-[#2C5EAD]/5" : ""
+                }`}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept=".mp3,.wav,.m4a,audio/*"
+                  className="hidden"
+                />
+                
+                <div className="w-12 h-12 rounded-full bg-[#1591DC]/5 flex items-center justify-center text-[#1591DC] mx-auto mb-4">
+                  <UploadCloud className="w-6 h-6" />
+                </div>
+
+                <h3 className="text-sm font-bold text-slate-800">
+                  Arrastra y suelta tus archivos de audio aquí
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Soporta formatos MP3, WAV o M4A (Máx 100MB)
+                </p>
+                
+                <button
+                  type="button"
+                  className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-650 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Buscar Archivos
+                </button>
+              </div>
+
+              {selectedFile && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-6 p-4 bg-slate-50/70 border border-slate-100 rounded-2xl flex items-center justify-between shadow-3xs"
+                >
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-[#2C5EAD]/10 text-[#2C5EAD] flex items-center justify-center shrink-0">
+                      <FileAudio className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold text-slate-700 block truncate">
+                        {selectedFile.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={triggerUploadTranscribe}
+                    className="px-4 py-2 bg-[#2C5EAD] hover:bg-[#1591DC] text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                  >
+                    Transcribir Archivo
+                  </button>
+                </motion.div>
+              )}
             </div>
 
-            <h3 className="text-sm font-bold text-slate-800">
-              Arrastra y suelta tus archivos de audio aquí
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Soporta formatos MP3, WAV o M4A (Máx 100MB)
-            </p>
-            
-            <button
-              type="button"
-              className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-600 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-            >
-              Buscar Archivos
-            </button>
-          </div>
-
-          {selectedFile && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-6 p-4 bg-slate-50/70 border border-slate-100 rounded-2xl flex items-center justify-between"
-            >
-              <div className="flex items-center space-x-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-[#2C5EAD]/10 text-[#2C5EAD] flex items-center justify-center shrink-0">
-                  <FileAudio className="w-4 h-4" />
+            {/* RIGHT COLUMN: OFFLINE ADVICE & UPLOAD SPECS */}
+            <div className="lg:col-span-5 flex flex-col justify-between bg-gradient-to-br from-slate-50/50 to-white border border-slate-100/90 rounded-3xl p-6 sm:p-8 text-left relative shadow-3xs">
+              <div>
+                <div className="text-[#1591DC] text-[10px] tracking-wider font-extrabold uppercase mb-2 flex items-center space-x-1">
+                  <Sparkles className="w-3.5 h-3.5 text-[#2C5EAD]" />
+                  <span>Subir Archivos Offline</span>
                 </div>
-                <div className="min-w-0">
-                  <span className="text-xs font-semibold text-slate-700 block truncate">
-                    {selectedFile.name}
-                  </span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                  </span>
+                <h4 className="text-sm font-bold text-slate-800 mb-4">¿Grabaste tu clase de forma presencial?</h4>
+                <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                  Sube audios capturados con tu celular, grabadora de voz o descargados de plataformas de videoconferencia para que la Inteligencia Artificial los analice de forma privada.
+                </p>
+
+                <div className="space-y-3.5">
+                  <div className="p-3.5 bg-white border border-slate-100 rounded-2xl">
+                    <h5 className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className="text-sky-500 font-extrabold">✔</span> Formatos de alta fidelidad
+                    </h5>
+                    <p className="text-[10px] text-slate-400 leading-normal mt-0.5">
+                      Para mejores resultados de transcripción de voz automática, utiliza formatos WAV, MP3 limpios u originarios de grabadoras digitales de voz.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 bg-white border border-slate-100 rounded-2xl">
+                    <h5 className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className="text-teal-550 font-extrabold">✔</span> Seguridad Completa
+                    </h5>
+                    <p className="text-[10px] text-slate-400 leading-normal mt-0.5">
+                      Los archivos de audio se analizan localmente o mediante la Gemini API de forma transitoria para extraer la transcripción y el resumen inteligente. Tus datos nunca se usan para entrenamiento.
+                    </p>
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={triggerUploadTranscribe}
-                className="px-4 py-2 bg-[#2C5EAD] hover:bg-[#1591DC] text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
-              >
-                Transcribir Archivo
-              </button>
-            </motion.div>
-          )}
+
+              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                <span>Límite de Carga: 100 Megabytes</span>
+                <span className="text-[#1591DC]">Cifrado Activo</span>
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 

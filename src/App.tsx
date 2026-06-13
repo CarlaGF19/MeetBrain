@@ -545,7 +545,7 @@ export default function App() {
         </AnimatePresence>
 
         {/* Active Content Body */}
-        <main className="flex-grow p-8 max-md:p-6 max-w-7xl mx-auto w-full">
+        <main className="flex-grow p-8 max-md:p-6 max-w-[1700px] xl:max-w-full xl:px-12 mx-auto w-full">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
