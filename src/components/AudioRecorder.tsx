@@ -323,25 +323,6 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
           const wordCount = fullText.trim().split(/\s+/).filter(Boolean).length;
           setDraftWordCount(wordCount);
-
-          if (onUpdateDraft && currentDraftIdRef.current) {
-            setIsSyncingDraft(true);
-            const m = Math.floor(duration / 60);
-            const s = duration % 60;
-            const liveDurationFormatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-            onUpdateDraft({
-              id: currentDraftIdRef.current,
-              title: `Borrador en Vivo: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-              transcript: fullText,
-              summary: "### Borrador Guardado en Tiempo Real\n\nEste es un borrador auto-guardado mientras hablabas. Si la transcripción del audio pesado falla, puedes usar la opción de IA para resumir este borrador de texto directamente en tu bóveda.",
-              duration: liveDurationFormatted,
-              isDraft: true,
-              date: new Date().toISOString()
-            });
-            setTimeout(() => {
-              setIsSyncingDraft(false);
-            }, 500);
-          }
         };
 
         recognition.onerror = (e: any) => {
@@ -372,7 +353,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       timerIntervalRef.current = setInterval(() => {
         setDuration((prev) => {
           const next = prev + 1;
-          if (next % 5 === 0 && onUpdateDraft && currentDraftIdRef.current) {
+          // Synchronize to the cloud every 20 minutes (20 * 60 = 1200 seconds)
+          if (next % 1200 === 0 && onUpdateDraft && currentDraftIdRef.current) {
             setIsSyncingDraft(true);
             const m = Math.floor(next / 60);
             const s = next % 60;
@@ -388,7 +370,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
             });
             setTimeout(() => {
               setIsSyncingDraft(false);
-            }, 500);
+            }, 800);
           }
           return next;
         });
@@ -438,6 +420,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      const finalTranscript = liveTranscriptRef.current || liveTranscript || "";
+
       // Stop SpeechRecognition immediately
       if (recognitionRef.current) {
         try {
@@ -449,6 +433,26 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       stopTracksAndTimers();
       setIsRecording(false);
       setIsPaused(false);
+
+      // Perform a robust final synchronized upload/save to the Cloud for the live PDF text draft
+      if (onUpdateDraft && currentDraftIdRef.current && finalTranscript) {
+        setIsSyncingDraft(true);
+        const m = Math.floor(duration / 60);
+        const s = duration % 60;
+        const liveDurationFormatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+        onUpdateDraft({
+          id: currentDraftIdRef.current,
+          title: `Borrador en Vivo: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+          transcript: finalTranscript,
+          summary: "### Borrador Guardado en Tiempo Real\n\nEste es un borrador auto-guardado mientras hablabas. Si la transcripción del audio pesado falla, puedes usar la opción de IA para resumir este borrador de texto directamente en tu bóveda.",
+          duration: liveDurationFormatted,
+          isDraft: true,
+          date: new Date().toISOString()
+        });
+        setTimeout(() => {
+          setIsSyncingDraft(false);
+        }, 800);
+      }
     }
   };
 
@@ -1035,101 +1039,137 @@ Specifically, generate:
             ) : (
               <motion.div
                 key="recording-screen"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 className="w-full flex flex-col items-center"
               >
-                {/* Glowing recording node indicator */}
-                <div className="flex items-center space-x-2 bg-emerald-50 text-emerald-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest leading-none mb-6">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                  <span>Grabación en curso...</span>
-                </div>
-
-                {/* Aesthetic Visualizer canvas */}
-                <div className="w-full max-w-md h-24 bg-slate-50/50 border border-slate-100 rounded-xl mb-6 relative overflow-hidden flex items-center justify-center">
-                  <canvas
-                    ref={canvasRef}
-                    width={400}
-                    height={96}
-                    className="w-full h-full block"
-                  />
-                  {isPaused && (
-                    <div className="absolute inset-0 bg-white/70 backdrop-blur-xs flex items-center justify-center text-xs font-semibold text-slate-500 uppercase tracking-widest">
-                      Sesión Pausada
-                    </div>
-                  )}
-                </div>
-
-                {/* formatted ticking clock */}
-                <div className="text-4xl font-light text-slate-800 tracking-wider mb-6 font-mono font-medium">
-                  {formatTimer(duration)}
-                </div>
-
-                {/* 🔴 LIVE TRANSCRIPTION PANEL */}
-                <div className="w-full max-w-md bg-slate-50 border border-slate-100/80 rounded-2xl p-4 mb-6 relative overflow-hidden flex flex-col items-start text-left shadow-inner">
-                  <div className="flex items-center space-x-2 text-[10px] font-bold text-rose-500 uppercase tracking-widest mb-2.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse inline-block" style={{ width: "6px", height: "6px" }} />
-                    <span>Transcripción en Vivo Transmitiendo</span>
+                {/* 1. Snug Header Control Row: side-by-side components */}
+                <div className="flex flex-wrap items-center justify-between w-full max-w-2xl px-5 py-2.5 bg-slate-50/70 border border-slate-100 rounded-2xl mb-3 gap-3">
+                  {/* Left: Ping indicator & status label */}
+                  <div className="flex items-center space-x-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider select-none">
+                      {isPaused ? "Captura Pausada" : "Captura en Curso"}
+                    </span>
                   </div>
-                  
-                  <div className="w-full h-24 overflow-y-auto font-sans text-xs text-slate-600 leading-relaxed scroll-smooth pr-1" style={{ maxHeight: "96px" }}>
-                    {liveTranscript || interimTranscript ? (
-                      <div className="space-y-1">
-                        <span className="text-slate-700 font-medium">{liveTranscript}</span>
-                        {interimTranscript && (
-                          <span className="text-slate-400 italic font-medium"> {interimTranscript}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-slate-400 italic text-[11px] py-6 text-center w-full">
-                        Hable claramente para ver la transcripción en vivo en español...
+
+                  {/* Center: Miniature, horizontal visualizer canvas */}
+                  <div className="w-24 h-6 bg-slate-100/50 border border-slate-205/10 rounded-md relative overflow-hidden flex items-center justify-center shrink-0">
+                    <canvas
+                      ref={canvasRef}
+                      width={120}
+                      height={24}
+                      className="w-full h-full block"
+                    />
+                    {isPaused && (
+                      <div className="absolute inset-0 bg-white/70 flex items-center justify-center text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                        Pausada
                       </div>
                     )}
                   </div>
 
-                  {/* Live Sync and PDF generation toolbar */}
-                  <div className="w-full mt-3 pt-3 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                  {/* Right: Timer Clock (large & clear, yet space saving) */}
+                  <div className="text-sm font-bold text-[#2C5EAD] tracking-wider font-mono bg-white border border-slate-100 px-3 py-1 rounded-xl shadow-3xs">
+                    ⏱️ {formatTimer(duration)}
+                  </div>
+                </div>
+
+                {/* 2. HERO: LARGE CHAT-STYLE TRANSCRIPTION LOG CONTAINER */}
+                <div className="w-full max-w-2xl bg-[#FAF9F6] border border-slate-100/90 rounded-2xl p-4.5 mb-3.5 relative overflow-hidden flex flex-col items-stretch text-left shadow-xs">
+                  
+                  {/* Box Header */}
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/40">
+                    <div className="flex items-center space-x-1.5 text-[10px] font-bold text-rose-500 uppercase tracking-widest">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse inline-block" />
+                      <span>Transcripción en Vivo Transmitiendo</span>
+                    </div>
+                    <span className="text-[10px] bg-[#135bf1]/5 border border-[#135bf1]/10 px-2 py-0.5 rounded-md font-bold text-[#135bf1]">
+                      {draftWordCount} palabras
+                    </span>
+                  </div>
+                  
+                  {/* Chat message dialog scroll window (tall and cozy) */}
+                  <div className="w-full h-80 overflow-y-auto font-sans scroll-smooth pr-1 flex flex-col justify-start" style={{ maxHeight: "320px", minHeight: "320px" }}>
+                    
+                    <div className="flex items-start gap-3">
+                      {/* Avatar icon bubble resembling Olli Chat assistant */}
+                      <div className="w-8 h-8 rounded-full bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center font-bold text-xs shrink-0 select-none shadow-3p shadow-indigo-600/5">
+                        🎙️
+                      </div>
+                      
+                      <div className="flex-grow bg-white border border-[#E9E9EB] p-4 rounded-2xl shadow-3xs transition-shadow">
+                        <p className="text-[9.5px] font-extrabold text-[#135bf1] uppercase tracking-widest mb-1.5 leading-none">
+                          Otter Olli Live Feed
+                        </p>
+                        
+                        <div className="text-xs text-slate-750 font-normal leading-relaxed font-sans whitespace-pre-wrap select-text">
+                          {liveTranscript || interimTranscript ? (
+                            <div className="space-y-1 bg-transparent pr-1">
+                              <span className="text-slate-800 font-normal">{liveTranscript}</span>
+                              {interimTranscript && (
+                                <span className="text-slate-400 italic font-medium"> {interimTranscript}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-slate-400 italic text-left py-12 flex flex-col items-center justify-center space-y-2 mt-4">
+                              <span className="text-xl animate-bounce">💬</span>
+                              <span className="text-[11px] font-medium text-slate-400">
+                                Di una frase para ver la transcripción en vivo...
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Live Sync and PDF generation toolbar (snug layout) */}
+                  <div className="w-full mt-3 pt-3 border-t border-slate-200/40 flex items-center justify-between text-[10.5px] text-slate-500 font-medium">
                     <div className="flex items-center space-x-1.5 text-emerald-600 font-semibold">
                       <Check className="w-3.5 h-3.5 stroke-[3px]" />
-                      <span className="animate-pulse">{isSyncingDraft ? "Autoguardando Bóveda..." : "Sincronizado con PDF"}</span>
+                      <span className="animate-pulse">
+                        {isSyncingDraft 
+                          ? "Guardando en la Nube..." 
+                          : `Sincronización en la Nube (${Math.floor(duration / 60)}m / Próximo sync en 20m)`
+                        }
+                      </span>
                     </div>
                     <button
                       type="button"
                       onClick={downloadLivePDF}
                       disabled={!liveTranscript && !interimTranscript}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1 bg-[#2C5EAD] hover:bg-[#1591DC] text-white rounded-lg text-[10px] font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center space-x-1 px-3 py-1.5 bg-[#2C5EAD] hover:bg-[#1591DC] text-white rounded-lg text-[10px] font-bold transition-all shadow-3xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
                     >
                       <FileDown className="w-3 h-3" />
-                      <span>Recuperar PDF (.pdf)</span>
+                      <span>Descargar Borrador (.pdf)</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Otter.ai style reassure text */}
-                <div className="max-w-sm mb-8 text-center px-4">
-                  <p className="text-xs font-semibold text-slate-700">
-                    Mantén esta pestaña abierta mientras grabas
-                  </p>
-                  <p className="text-[11px] text-slate-400 leading-relaxed mt-1">
-                    MeetingBrain capturará y transcribirá tu audio de forma segura en tiempo real. Cerrar esta ventana detendrá la grabación.
-                  </p>
-                </div>
+                {/* 3. Snug Assistant Reassure line (compact to avoid overflow) */}
+                <p className="text-[10px] text-slate-400 text-center max-w-md leading-tight mb-3">
+                  Mantén esta pestaña abierta mientras grabas. Autoguardado seguro activo en segundo plano.
+                </p>
 
-                {/* Controls */}
-                <div className="flex items-center justify-center space-x-4">
+                {/* 4. Controls toolbar (cozy bottom layout) */}
+                <div className="flex items-center justify-center space-x-3 w-full max-w-2xl pt-2 border-t border-slate-100">
                   <button
                     onClick={pauseRecording}
-                    className="p-3 bg-slate-50 hover:bg-slate-100 rounded-full border border-slate-200 text-slate-600 hover:text-slate-800 transition-all cursor-pointer shadow-xs active:scale-95"
+                    className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-full border border-slate-200 text-slate-600 hover:text-slate-800 transition-all cursor-pointer shadow-3xs active:scale-95"
                     title={isPaused ? "Reanudar Sesión" : "Pausar Sesión"}
                   >
-                    {isPaused ? <Play className="w-5 h-5 text-emerald-500 fill-emerald-500" /> : <Pause className="w-5 h-5" />}
+                    {isPaused ? <Play className="w-4 h-4 text-emerald-500 fill-emerald-500" /> : <Pause className="w-4 h-4" />}
                   </button>
                   <button
                     onClick={stopRecording}
-                    className="px-6 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-full flex items-center space-x-2 font-semibold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-rose-500/10 hover:shadow-lg hover:shadow-rose-500/15 active:scale-95"
+                    className="px-5 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full flex items-center space-x-2 font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-rose-500/10 hover:shadow-lg hover:shadow-rose-500/15 active:scale-95"
                   >
-                    <Square className="w-4 h-4 fill-white" />
+                    <Square className="w-3.5 h-3.5 fill-white" />
                     <span>Terminar y Transcribir</span>
                   </button>
                 </div>
