@@ -10,7 +10,6 @@ import {
   MessageSquare,
   Compass,
   Cpu,
-  UserPlus,
   ChevronDown,
   Bell,
   Download,
@@ -110,13 +109,7 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* Invite Teammates button */}
-        <div className="px-3 mb-4">
-          <button className="w-full flex items-center gap-2.5 px-3 py-2 border border-dashed border-[#CACACF] hover:border-[#135bf1] rounded-xl hover:bg-[#135bf1]/5 text-slate-700 hover:text-[#135bf1] transition-all text-sm font-medium cursor-pointer text-left">
-            <UserPlus className="w-4 h-4 shrink-0" />
-            <span className="text-xs font-semibold">Invite Teammates</span>
-          </button>
-        </div>
+
 
         {/* Navigation List */}
         <nav className="px-3 space-y-[2px] mb-6">
