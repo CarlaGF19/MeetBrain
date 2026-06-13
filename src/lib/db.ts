@@ -261,3 +261,42 @@ export async function saveUserSettingsToCloud(userId: string, settings: AppSetti
     console.warn("Firestore options save failed, written to local cache:", error);
   }
 }
+
+export async function deleteUserAccountFromCloud(userId: string): Promise<void> {
+  // 1. Delete user settings
+  if (!userId.startsWith("local_")) {
+    try {
+      const settingsRef = doc(db, SETTINGS_COLLECTION, userId);
+      await deleteDoc(settingsRef);
+    } catch (e) {
+      console.error("Error deleting settings from Firestore:", e);
+    }
+
+    // 2. Clear meetings matching ownerId from Firestore
+    try {
+      const q = query(collection(db, MEETINGS_COLLECTION), where("ownerId", "==", userId));
+      const querySnapshot = await getDocs(q);
+      for (const d of querySnapshot.docs) {
+        await deleteDoc(d.ref);
+      }
+    } catch (e) {
+      console.error("Error deleting meetings from Firestore:", e);
+    }
+  }
+
+  // 3. Clear IndexedDB
+  try {
+    const idbMeetings = await getIDBMeetings(userId);
+    for (const m of idbMeetings) {
+      await deleteIDBMeeting(m.id);
+    }
+  } catch (e) {
+    console.error("Error clearing IndexedDB:", e);
+  }
+
+  // 4. Clear locally mirrored configurations
+  localStorage.removeItem("mb_user");
+  localStorage.removeItem("mb_settings");
+  localStorage.removeItem(`mb_settings_local_${userId}`);
+  localStorage.removeItem(`mb_settings_cloud_${userId}`);
+}

@@ -16,13 +16,14 @@ import {
   Download,
   Flame,
   LogOut,
-  FolderHeart
+  FolderHeart,
+  Settings
 } from "lucide-react";
 
 interface SidebarProps {
   user: User;
-  activeTab: "dashboard" | "recorder" | "meetings" | "settings";
-  setActiveTab: (tab: "dashboard" | "recorder" | "meetings" | "settings") => void;
+  activeTab: "dashboard" | "recorder" | "meetings" | "settings" | "integrations";
+  setActiveTab: (tab: "dashboard" | "recorder" | "meetings" | "settings" | "integrations") => void;
   onLogout: () => void;
   favoritesCount: number;
   meetings: Meeting[];
@@ -56,9 +57,14 @@ export default function Sidebar({
       icon: Compass,
     },
     {
-      id: "settings" as const,
+      id: "integrations" as const,
       label: "Integrations",
       icon: Cpu,
+    },
+    {
+      id: "settings" as const,
+      label: "Settings",
+      icon: Settings,
     },
   ];
 
@@ -156,37 +162,18 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Sidebar Footer Cards */}
+      {/* Sidebar Footer */}
       <div className="p-3 space-y-2 border-t border-[#F2F2F2]">
         
-        {/* Promotional Card 1: App */}
-        <div className="bg-[#F8F9FA] rounded-2xl p-3.5 border border-[#E9ECEF] relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-1">
-            <span className="text-[10px] bg-[#E9ECEF] text-slate-600 rounded px-1 cursor-pointer">✕</span>
-          </div>
-          <p className="text-xs font-bold text-[#111111]">Get the desktop app</p>
-          <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-            Local, reliable, bot-free recording
+        {/* Open Source Info Card */}
+        <div className="bg-[#FAF9F6] rounded-2xl p-3 border border-[#E9E9EB] relative overflow-hidden text-left">
+          <p className="text-xs font-bold text-[#111111] flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Olli Workspace
           </p>
-          <a
-            href="#"
-            onClick={(e) => e.preventDefault()}
-            className="text-xs font-bold text-[#135bf1] hover:underline mt-2 flex items-center gap-1.5 group-hover:translate-x-0.5 transition-transform"
-          >
-            <span>Download</span>
-            <span className="text-[10px]">→</span>
-          </a>
-        </div>
-
-        {/* Promotional Card 2: Business Trial */}
-        <div className="bg-[#FFF9F6] rounded-2xl p-3.5 border border-[#FFE8DC] flex items-start gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-[#FFF2EB] border border-[#FFD3C0] flex items-center justify-center text-[#FF6A13] shrink-0">
-            <Flame className="w-4 h-4 text-[#FF6A13]" />
-          </div>
-          <div className="text-left">
-            <p className="text-xs font-bold text-[#111111] leading-none">Business Trial</p>
-            <p className="text-[10px] text-slate-500 mt-1">14 days left</p>
-          </div>
+          <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+            Open-source meeting minutes engine & offline-first private secure chest.
+          </p>
         </div>
 
         {/* Exit Account Button */}

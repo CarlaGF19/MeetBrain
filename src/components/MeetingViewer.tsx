@@ -32,7 +32,9 @@ import {
   UserCheck,
   ChevronLeft,
   ArrowRight,
-  HelpCircle
+  HelpCircle,
+  FolderOpen,
+  FileAudio
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -639,11 +641,14 @@ ${meeting.transcript}
         </div>
 
         {/* Saved notes render container */}
-        <div className="flex-grow overflow-y-auto p-2 space-y-1">
+        <div className="flex-grow overflow-y-auto p-2.5 space-y-1.5">
           {filteredMeetings.length === 0 ? (
-            <div className="text-center py-12 px-2">
-              <span className="text-xl">📁</span>
-              <p className="text-[10px] text-slate-400 mt-2">No conversations match</p>
+            <div className="text-center py-16 px-4 flex flex-col items-center">
+              <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mb-3 shadow-inner">
+                <FolderOpen className="w-6 h-6 text-slate-400" />
+              </div>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Bóveda Vacía</p>
+              <p className="text-[10px] text-slate-400 mt-1 leading-normal max-w-[160px] mx-auto text-center">No se encontraron apuntes o actas guardadas</p>
             </div>
           ) : (
             filteredMeetings.map((meeting) => {
@@ -652,33 +657,42 @@ ${meeting.transcript}
                 <div
                   key={meeting.id}
                   onClick={() => onSelectMeeting(meeting)}
-                  className={`p-3 rounded-xl cursor-pointer transition-all flex justify-between items-start group relative ${
+                  className={`p-2.5 rounded-xl cursor-pointer transition-all flex items-start gap-3 group relative border ${
                     representsActive
-                      ? "bg-[#135bf1]/5 border border-[#135bf1]/20 shadow-2xs"
-                      : "bg-transparent hover:bg-slate-100/50 border border-transparent"
+                      ? "bg-[#135bf1]/5 border-[#135bf1]/20 shadow-sm"
+                      : "bg-transparent hover:bg-slate-50/80 border-transparent"
                   }`}
                 >
-                  <div className="min-w-0 pr-2">
-                    <span className={`text-xs font-bold block truncate transition-colors leading-snug ${
+                  {/* Styled Note Indicator Icon */}
+                  <div className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+                    representsActive 
+                      ? "bg-[#135bf1] text-white" 
+                      : "bg-slate-100 text-slate-500 group-hover:bg-[#135bf1]/10 group-hover:text-[#135bf1]"
+                  }`}>
+                    <FileAudio className="w-4.5 h-4.5" />
+                  </div>
+
+                  <div className="min-w-0 flex-grow pr-1">
+                    <span className={`text-[12px] font-bold block truncate transition-colors leading-tight ${
                       representsActive ? "text-[#135bf1]" : "text-slate-800 group-hover:text-[#135bf1]"
                     }`}>
                       {meeting.title}
                     </span>
-                    <div className="flex items-center space-x-2 text-[10px] text-slate-400 mt-1">
+                    <div className="flex items-center space-x-1.5 text-[9.5px] text-slate-400 mt-1 font-semibold">
                       <span className="flex items-center">
-                        <Calendar className="w-3 h-3 mr-0.5 shrink-0" />
+                        <Calendar className="w-3 h-3 mr-0.5 shrink-0 text-slate-400" />
                         {formatInUTC5(meeting.date, "shortDate")}
                       </span>
                       <span>•</span>
-                      <span className="flex items-center max-w-[50px] truncate">
-                        <Clock className="w-3 h-3 mr-0.5 shrink-0" />
+                      <span className="flex items-center truncate">
+                        <Clock className="w-3 h-3 mr-0.5 shrink-0 text-slate-400" />
                         {meeting.duration}
                       </span>
                     </div>
                   </div>
                   
                   {meeting.isFavorite && (
-                    <Pin className="w-3 h-3 text-[#135bf1] fill-[#135bf1] shrink-0 mt-0.5" />
+                    <Pin className="w-3.5 h-3.5 text-[#135bf1] fill-[#135bf1] shrink-0 mt-1" />
                   )}
                 </div>
               );
@@ -1195,12 +1209,14 @@ ${meeting.transcript}
           </div>
         ) : (
           <div className="flex-grow flex flex-col items-center justify-center p-8 text-center bg-slate-50/5 select-none">
-            <span className="text-4xl animate-bounce">📁</span>
-            <h3 className="text-xs font-black text-slate-700 mt-4 uppercase tracking-wider">
+            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mb-4 shadow-sm">
+              <FolderOpen className="w-7 h-7 text-slate-400" />
+            </div>
+            <h3 className="text-xs font-black text-slate-700 mt-1 uppercase tracking-wider">
               No Conversation Active
             </h3>
             <p className="text-[10px] text-slate-400 max-w-xs mt-1.5 leading-relaxed">
-              Select an audio file or notes draft from the Obsidian chest folder sidebar on the left, or open the Olli AI Chat tab to record meetings.
+              Selecciona una sesión de audio o acta de la boveda a la izquierda, o inicia una nueva grabación dentro de Olli AI Chat.
             </p>
           </div>
         )}

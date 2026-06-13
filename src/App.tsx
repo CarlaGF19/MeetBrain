@@ -11,7 +11,8 @@ import Dashboard from "./components/Dashboard";
 import AudioRecorder from "./components/AudioRecorder";
 import MeetingViewer from "./components/MeetingViewer";
 import SettingsPanel from "./components/SettingsPanel";
-import { Brain, Menu, X, LayoutDashboard, Mic, FolderOpen, Settings, LogOut } from "lucide-react";
+import OnboardingScreen from "./components/OnboardingScreen";
+import { Brain, Menu, X, LayoutDashboard, Mic, FolderOpen, Settings, LogOut, Cpu } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   fetchUserMeetings,
@@ -19,7 +20,8 @@ import {
   updateMeetingInCloud,
   deleteMeetingFromCloud,
   fetchUserSettings,
-  saveUserSettingsToCloud
+  saveUserSettingsToCloud,
+  deleteUserAccountFromCloud
 } from "./lib/db";
 
 // 1. Pristine demo meetings seeding standard Obsidian outputs
@@ -89,14 +91,14 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
 
   // Active workspace page
-  const [activeTab, setActiveTab] = useState<"dashboard" | "recorder" | "meetings" | "settings">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "recorder" | "meetings" | "settings" | "integrations">("dashboard");
 
   // Meetings and Settings state
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [settings, setSettings] = useState<AppSettings>({
     aiProvider: "gemini",
-    apiKey: "AQ.Ab8RN6L409A8VsqFzDtEg2eDDP_PnLFxXNGC_ox6-yAgOHO-vQ",
+    apiKey: "",
     audioFolder: "/MeetingBrain/Vault/",
     autoDeleteAudio: true,
     bypassSizeLimit: false,
@@ -128,7 +130,7 @@ export default function App() {
         if (cloudSettings) {
           const loaded = {
             ...cloudSettings,
-            apiKey: cloudSettings.apiKey || "AQ.Ab8RN6L409A8VsqFzDtEg2eDDP_PnLFxXNGC_ox6-yAgOHO-vQ",
+            apiKey: cloudSettings.apiKey || "",
           };
           setSettings(loaded);
           if (!cloudSettings.apiKey) {
@@ -140,7 +142,7 @@ export default function App() {
             const parsed = JSON.parse(savedSettings);
             const loaded = {
               ...parsed,
-              apiKey: parsed.apiKey || "AQ.Ab8RN6L409A8VsqFzDtEg2eDDP_PnLFxXNGC_ox6-yAgOHO-vQ",
+              apiKey: parsed.apiKey || "",
             };
             setSettings(loaded);
             await saveUserSettingsToCloud(user.uid, loaded);
@@ -181,6 +183,19 @@ export default function App() {
     setUser(null);
     localStorage.removeItem("mb_user");
     setMobileMenuOpen(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    try {
+      await deleteUserAccountFromCloud(user.uid);
+      setUser(null);
+      setMeetings([]);
+      setSelectedMeeting(null);
+    } catch (err) {
+      console.error("Failed to delete account:", err);
+      throw err;
+    }
   };
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
@@ -385,6 +400,21 @@ export default function App() {
     return <LoginRegister onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // Enforce onboarding / first setup if user has no API Key configured
+  if (!settings.apiKey || settings.apiKey.trim() === "") {
+    return (
+      <OnboardingScreen
+        user={user}
+        onSaveApiKey={async (key) => {
+          const updatedSettings = { ...settings, apiKey: key };
+          setSettings(updatedSettings);
+          await saveUserSettingsToCloud(user.uid, updatedSettings);
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white flex text-slate-900 font-sans antialiased overflow-x-hidden">
       
@@ -434,9 +464,10 @@ export default function App() {
             >
               <div className="p-4 space-y-1.5">
                 {[
-                  { id: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
-                  { id: "recorder" as const, label: "New Recording", icon: Mic },
-                  { id: "meetings" as const, label: "My Vault", icon: FolderOpen },
+                  { id: "dashboard" as const, label: "Home", icon: LayoutDashboard },
+                  { id: "recorder" as const, label: "Olli AI Chat", icon: Mic },
+                  { id: "meetings" as const, label: "Explore", icon: FolderOpen },
+                  { id: "integrations" as const, label: "Integrations", icon: Cpu },
                   { id: "settings" as const, label: "Settings", icon: Settings },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -525,6 +556,17 @@ export default function App() {
                 <SettingsPanel
                   settings={settings}
                   onSaveSettings={handleSaveSettings}
+                  defaultTab="general"
+                  onDeleteAccount={handleDeleteAccount}
+                />
+              )}
+
+              {activeTab === "integrations" && (
+                <SettingsPanel
+                  settings={settings}
+                  onSaveSettings={handleSaveSettings}
+                  defaultTab="integrations"
+                  onDeleteAccount={handleDeleteAccount}
                 />
               )}
             </motion.div>
