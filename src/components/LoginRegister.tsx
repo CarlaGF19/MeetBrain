@@ -172,7 +172,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
         </div>
 
         {/* RIGHT COLUMN (5 Cols) - Vibrant Glowing Blue-Cyan Glassmorphic Portal */}
-        <div className="lg:col-span-5 p-6 sm:p-14 lg:p-16 flex flex-col justify-center items-stretch bg-white/[0.01] border-l border-white/5 relative">
+        <div className="lg:col-span-5 p-6 sm:p-14 lg:p-16 flex flex-col justify-center items-stretch bg-white/[0.01] relative">
           
           <div className="my-auto max-w-sm mx-auto w-full">
             
@@ -184,18 +184,6 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
 
               {/* Top Accent line */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
-
-              {/* Secure Fingerprint block */}
-              <div className="w-14 h-14 bg-black/15 border border-white/15 rounded-2xl flex items-center justify-center text-white mb-6 mx-auto shadow-inner">
-                <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 12C2 6.5 6.5 2 12 2s10 4.5 10 10" />
-                  <path d="M5 19.5C6.9 21 9.4 22 12 22s5.1-1 7-2.5" />
-                  <path d="M12 11V7" />
-                  <path d="M8 14v-3c0-2.2 1.8-4 4-4s4 1.8 4 4v3" />
-                  <path d="M12 18h.01" />
-                  <circle cx="12" cy="14" r="2" />
-                </svg>
-              </div>
 
               {/* High Contrast Headings */}
               <h2 className="font-display text-2xl font-bold text-white tracking-tight">
