@@ -225,8 +225,24 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
   // File Upload states
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const liveScrollRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
+
+  // Auto-scroll transcription window to bottom when new words arrive
+  useEffect(() => {
+    if (liveScrollRef.current) {
+      liveScrollRef.current.scrollTop = liveScrollRef.current.scrollHeight;
+    }
+  }, [liveTranscript, interimTranscript]);
+
+  // Auto-scroll chat window to bottom when new messages or typing indicators arrive/update
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages, isChatSending]);
 
   // Clean-up refs on unmount
   useEffect(() => {
@@ -438,8 +454,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || "audio/webm" });
-        await handleAudioProcess(audioBlob, duration);
+        // Direct recording uses real-time Web Speech API live text.
+        // As requested ('no guardaremos audio'), we avoid processing and uploading raw audio files to save storage and bypass server limits.
+        console.log("Audio preservation disabled: live speech-to-text text-draft used instead.");
       };
 
       mediaRecorderRef.current = mediaRecorder;
@@ -571,6 +588,67 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     }
   };
 
+  const handleTextProcess = async (text: string, durationSec: number) => {
+    setIsProcessing(true);
+    setProcessingStatus("Analizando y compilando transcripción de clase...");
+    
+    const cleanText = text.trim();
+    if (!cleanText || cleanText === "(Silencio por ahora)" || cleanText === "(Silencio grabado...)") {
+      setErrorMessage("No se detectó suficiente texto o voz audible en esta sesión para elaborar un resumen inteligente.");
+      setIsProcessing(false);
+      setProcessingStatus("");
+      return;
+    }
+
+    try {
+      setProcessingStatus("Generando resumen ejecutivo y acta de clase con Gemini AI...");
+      const response = await fetch("/api/summarize-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript: cleanText,
+          apiKey: settings.apiKey,
+        }),
+      });
+
+      const rawText = await response.text();
+
+      if (!response.ok) {
+        let errorMsg = "Fallo al procesar el resumen del texto.";
+        try {
+          const jsonError = JSON.parse(rawText);
+          errorMsg = jsonError.error || errorMsg;
+        } catch (e) {
+          errorMsg = `Error en el servidor de transacciones (Estado ${response.status}).`;
+        }
+        throw new Error(errorMsg);
+      }
+
+      let json;
+      try {
+        json = JSON.parse(rawText);
+      } catch (parseError) {
+        throw new Error("La respuesta del servidor no tiene un formato de datos JSON válido.");
+      }
+
+      onTranscriptionSuccess({
+        ...json,
+        id: currentDraftIdRef.current || undefined
+      }, durationSec);
+
+    } catch (err: any) {
+      console.error("Text processing error details:", err);
+      setErrorMessage(err.message || "No se pudo procesar la transcripción de clase.");
+      setFailedSessionData({
+        transcript: cleanText,
+        durationSec,
+      });
+    } finally {
+      setIsProcessing(false);
+      setProcessingStatus("");
+    }
+  };
+
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       const finalTranscript = liveTranscriptRef.current || liveTranscript || "";
@@ -606,6 +684,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
           setIsSyncingDraft(false);
         }, 800);
       }
+
+      // Directly process and summarize the live collected transcript text
+      handleTextProcess(finalTranscript, duration);
     }
   };
 
@@ -1144,7 +1225,11 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                       </div>
                       
                       {/* Live Feed Dialog Scroll Window */}
-                      <div className="w-full overflow-y-auto font-sans scroll-smooth pr-1 flex flex-col justify-start" style={{ height: "300px", maxHeight: "300px", minHeight: "300px" }}>
+                      <div 
+                        ref={liveScrollRef}
+                        className="w-full overflow-y-auto font-sans scroll-smooth pr-1 flex flex-col justify-start" 
+                        style={{ height: "550px", maxHeight: "550px", minHeight: "550px" }}
+                      >
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 rounded-full bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center font-bold text-xs shrink-0 select-none">
                             🎙️
@@ -1155,7 +1240,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                               Canal de Audio Directo / Clase
                             </p>
                             
-                            <div className="text-xs text-slate-750 font-normal leading-relaxed font-sans whitespace-pre-wrap select-text">
+                            <div className="text-sm text-slate-800 font-normal leading-relaxed font-sans whitespace-pre-wrap select-text">
                               {liveTranscript || interimTranscript ? (
                                 <div className="space-y-1 bg-transparent pr-1">
                                   <span className="text-slate-800 font-normal">{liveTranscript}</span>
@@ -1220,7 +1305,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                   </div>
 
                   {/* RIGHT COLUMN: INTERACTIVE AI Q&A COMPANION (col-span-12 or lg:col-span-6) */}
-                  <div className="lg:col-span-6 flex flex-col items-stretch bg-slate-50 border border-slate-200/60 rounded-3xl p-5 relative min-h-[480px]">
+                  <div className="lg:col-span-6 flex flex-col items-stretch bg-slate-50 border border-slate-200/60 rounded-3xl p-5 relative min-h-[680px]">
                     
                     {/* Header */}
                     <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 mb-3.5">
@@ -1288,8 +1373,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
                     {/* CHAT MESSAGES PANEL */}
                     <div 
+                      ref={chatScrollRef}
                       className="flex-1 overflow-y-auto space-y-3 pr-1 py-1 mb-4 border-b border-slate-200/50 flex flex-col justify-start"
-                      style={{ height: "240px", maxHeight: "240px" }}
+                      style={{ height: "440px", maxHeight: "440px" }}
                     >
                       {chatMessages.map((msg, i) => (
                         <div
