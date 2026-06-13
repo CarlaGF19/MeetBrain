@@ -153,6 +153,11 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // Configure Vite middleware or static serving
 async function configureServer() {
+  if (process.env.VERCEL) {
+    console.log("Running in Vercel context. Skipping Vite/static configurations as routing is managed by Vercel edge/rewrites.");
+    return;
+  }
+
   const distPath = path.join(process.cwd(), "dist");
   const isProduction = process.env.NODE_ENV === "production" || fs.existsSync(distPath);
 
@@ -174,11 +179,9 @@ async function configureServer() {
     });
   }
 
-  if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`MeetingBrain Server fully operational at http://localhost:${PORT}`);
-    });
-  }
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`MeetingBrain Server fully operational at http://localhost:${PORT}`);
+  });
 }
 
 configureServer().catch((err) => {
