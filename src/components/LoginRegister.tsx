@@ -107,7 +107,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                 El motor inteligente de minutas que convierte tus reuniones en apuntes de valor.
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
-                Transcribe conferencias, organiza planes de acción para <strong className="text-slate-800">Obsidian</strong> y <strong className="text-slate-800">Notion</strong>, y debate acuerdos directamente con Olli, tu copiloto de IA con total privacidad.
+                Transcribe conferencias, organiza planes de acción, y debate acuerdos directamente con Olli, tu copiloto de IA con total privacidad.
               </p>
             </div>
 
@@ -128,7 +128,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                 <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 mb-2.5">
                   <FileText className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-bold text-slate-900">Bóveda de Obsidian & Notion</h4>
+                <h4 className="text-xs font-bold text-slate-900">Bóveda Inteligente Estructurada</h4>
                 <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
                   Generación instantánea de actas ejecutivas estructuradas en Markdown con listas de tareas marcables.
                 </p>
@@ -163,109 +163,26 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
               <Cpu className="w-3.5 h-3.5 text-slate-400" />
               <span>Olli workspace release v2.5.2 (Open-Source Edition)</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="font-semibold text-emerald-650">Alojado en Cloud Run privado</span>
-            </div>
           </div>
 
         </div>
 
-        {/* RIGHT COLUMN (5 Cols) - Cartoon Mascots bubble display and Google/Apple Secure login gateway */}
-        <div className="lg:col-span-5 p-8 sm:p-12 flex flex-col justify-between bg-white relative">
+        {/* RIGHT COLUMN (5 Cols) - Secure Google Login Gateway, clean & minimalist design without mascots */}
+        <div className="lg:col-span-5 p-8 sm:p-12 flex flex-col justify-center items-stretch bg-white relative">
           
-          {/* Top section - mascott visualization bubble container, shrunk elegantly into desktop right card */}
-          <div className="w-full relative h-[180px] border border-[#F2F2F2] rounded-2xl overflow-hidden bg-slate-50/40 divide-y divide-slate-100 flex flex-col pt-2 shrink-0">
-            <div className="px-3 pb-1 flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-              <span>Mascot Crew Playground</span>
-              <span className="text-[#135bf1]">olli.ai</span>
-            </div>
-
-            <div className="flex-grow relative overflow-hidden">
-              
-              {/* Curly connecting threads in bubble viewport */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-80" viewBox="0 0 350 140">
-                <path d="M 40,30 C 100,-10 130,50 180,20 C 220,-10 260,40 300,20" fill="none" stroke="#E9E9EB" strokeWidth="1.5" strokeDasharray="3 3"/>
-                <path d="M 60,110 C 100,120 160,80 200,100 C 240,110 280,90 310,70" fill="none" stroke="#E9E9EB" strokeWidth="1.5"/>
-              </svg>
-
-              {/* mascot pink character bubble */}
-              <motion.div
-                animate={{ y: [0, -4, 0] }}
-                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                className="absolute left-[8%] top-[10%] w-9 h-9 rounded-full bg-gradient-to-br from-[#ffd5ee] to-[#f472b6] border border-black shadow-xs z-10 flex items-center justify-center cursor-pointer"
-                title="Hello Pinky!"
-              >
-                <div className="w-[70%] h-[70%] flex flex-col justify-center items-center">
-                  <div className="flex space-x-1 justify-center">
-                    <span className="w-1 h-2 bg-black rounded-full" />
-                    <span className="w-1 h-2 bg-black rounded-full" />
-                  </div>
-                  <span className="w-1.5 h-1.5 bg-black rounded-full mt-0.5" />
-                </div>
-              </motion.div>
-
-              {/* mascot green bubble */}
-              <motion.div
-                animate={{ y: [0, 4, 0] }}
-                transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut", delay: 0.5 }}
-                className="absolute left-[34%] top-[45%] w-11 h-11 rounded-full bg-gradient-to-br from-[#d2fab4] to-[#7adb64] border border-black shadow-xs z-10 flex items-center justify-center cursor-pointer"
-              >
-                <div className="w-[80%] h-[80%] flex flex-col justify-center items-center">
-                  <div className="flex space-x-1.5 justify-center">
-                    <span className="w-1 h-1 bg-black rounded-full" />
-                    <span className="w-1 h-1 bg-black rounded-full" />
-                  </div>
-                  <span className="w-3 h-1 border-b border-black rounded-full mt-1" />
-                </div>
-              </motion.div>
-
-              {/* Hello speech pill */}
-              <div className="absolute left-[54%] top-[14%] -translate-x-1/2 bg-black text-white px-2.5 py-0.5 rounded-full text-[9px] font-bold shadow-md z-20">
-                <span>Hello~</span>
-              </div>
-
-              {/* mascot blue bubble */}
-              <motion.div
-                animate={{ y: [0, -3, 0] }}
-                transition={{ repeat: Infinity, duration: 4.2, ease: "easeInOut", delay: 1 }}
-                className="absolute left-[66%] top-[35%] w-12 h-12 rounded-full bg-gradient-to-br from-[#a6e0ff] to-[#3ca3ff] border border-black shadow-sm z-10 flex items-center justify-center cursor-pointer"
-              >
-                <div className="w-[85%] h-[85%] flex flex-col justify-center items-center">
-                  <div className="flex space-x-1.5 justify-center">
-                    <span className="w-1.5 h-2 bg-black rounded-full" />
-                    <span className="w-1.5 h-2 bg-black rounded-full" />
-                  </div>
-                  <span className="w-4.5 h-1.5 border-b border-black rounded-full mt-0.5" />
-                </div>
-              </motion.div>
-
-              {/* mascot yellow bubble */}
-              <motion.div
-                animate={{ y: [0, 3, 0] }}
-                transition={{ repeat: Infinity, duration: 5, ease: "easeInOut", delay: 1.5 }}
-                className="absolute left-[82%] top-[10%] w-10 h-10 rounded-full bg-gradient-to-br from-[#ffee93] to-[#fbc326] border border-black shadow-xs z-10 flex items-center justify-center cursor-pointer"
-              >
-                <div className="w-[80%] h-[80%] flex flex-col justify-center">
-                  <div className="flex space-x-1 justify-center">
-                    <span className="w-1 h-1 bg-black rounded-full" />
-                    <span className="w-1 h-1 bg-black rounded-full" />
-                  </div>
-                  <span className="text-[10px] text-center font-bold text-black mt-[-2px]">⏡</span>
-                </div>
-              </motion.div>
-
-            </div>
-          </div>
-
           {/* Middle Section - Form Credentials / OAuth Gateway */}
-          <div className="my-8 text-center flex-grow flex flex-col justify-center">
+          <div className="my-4 text-center flex flex-col justify-center">
             
+            {/* Elegant tiny lock illustration block to complement typography */}
+            <div className="w-12 h-12 bg-[#135bf1]/5 border border-[#135bf1]/12 rounded-2xl flex items-center justify-center text-[#135bf1] mt-2 mb-4 mx-auto shadow-3xs">
+              <Lock className="w-5 h-5" />
+            </div>
+
             <h2 className="text-lg font-black text-slate-900 tracking-tight">
               Ingresa a tu Espacio Seguro
             </h2>
-            <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto">
-              Utiliza un método seguro para acceder a tu panel. Tus grabaciones de audio y resúmenes de Obsidian se mantendrán sincronizados.
+            <p className="text-[11px] text-slate-500 mt-1.5 max-w-sm mx-auto leading-relaxed">
+              Utiliza un método seguro para acceder a tu panel. Tus grabaciones de audio y notas se mantendrán sincronizadas de forma privada.
             </p>
 
             <div className="space-y-3 mt-6 max-w-[320px] mx-auto w-full">
