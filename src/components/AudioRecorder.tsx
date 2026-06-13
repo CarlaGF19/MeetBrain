@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { Mic, Square, Play, Pause, UploadCloud, FileAudio, AlertCircle, Sparkles, Brain, Tv, Volume2, FileDown, Check } from "lucide-react";
+import { Mic, Square, Play, Pause, UploadCloud, FileAudio, AlertCircle, Sparkles, Brain, Tv, Volume2, FileDown, Check, Send, HelpCircle, GraduationCap, Search, ArrowRight, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
 
@@ -45,6 +45,159 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   // Live real-time speech states
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
+
+  // Live Copilot chat states
+  const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string; timestamp?: string }>>([
+    {
+      role: "assistant",
+      content: "¡Hola! Estoy listo para escuchar la transcripción en vivo de tu clase. Cuando el profesor o los oradores expongan preguntas, dudas o temas clave, los detectaré automáticamente o me los podrás preguntar para que te busque la respuesta al instante.",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    }
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatSending, setIsChatSending] = useState(false);
+  const [detectedQuestions, setDetectedQuestions] = useState<string[]>([]);
+  const [isDetectingQuestions, setIsDetectingQuestions] = useState(false);
+
+  // Helper to auto-extract quick questions with Regex
+  const autoDetectQuestionsFromText = (text: string) => {
+    const regex = /¿([^?]+)\?/g;
+    const questions: string[] = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const q = match[1].trim();
+      if (q.length > 5 && q.length < 150) {
+        questions.push(`¿${q}?`);
+      }
+    }
+    const words = text.toLowerCase();
+    const keywords = ["la tarea es", "pregunta de examen", "examen", "para la próxima semana", "la duda es"];
+    keywords.forEach(kw => {
+      if (words.includes(kw)) {
+        const idx = words.indexOf(kw);
+        const sentence = text.substring(Math.max(0, idx - 10), Math.min(text.length, idx + 100)).trim();
+        if (sentence && !questions.includes(sentence)) {
+          questions.push(`Pregunta/Dato: "...${sentence}..."`);
+        }
+      }
+    });
+    return Array.from(new Set(questions)).slice(-5);
+  };
+
+  // Listen to liveTranscript to auto-extract quick questions with regex
+  useEffect(() => {
+    if (!liveTranscript) return;
+    const questions = autoDetectQuestionsFromText(liveTranscript);
+    if (questions.length > 0) {
+      setDetectedQuestions((prev) => {
+        const combined = Array.from(new Set([...prev, ...questions]));
+        return combined.slice(-5);
+      });
+    }
+  }, [liveTranscript]);
+
+  const handleSendLiveChat = async (questionText: string) => {
+    if (!questionText.trim()) return;
+    
+    const userMsg = {
+      role: "user" as const,
+      content: questionText,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    };
+    
+    setChatMessages((prev) => [...prev, userMsg]);
+    setChatInput("");
+    setIsChatSending(true);
+
+    try {
+      const currentTranscript = liveTranscriptRef.current || liveTranscript || "(Silencio por ahora)";
+      
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript: currentTranscript,
+          messages: chatMessages.filter(m => m.content !== "¡Hola! ..."),
+          userMessage: questionText,
+          apiKey: settings.apiKey
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo obtener la respuesta del Copiloto AI.");
+      }
+
+      const data = await response.json();
+      
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: data.response || "No tengo suficiente contexto para responder a eso todavía.",
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        }
+      ]);
+    } catch (err: any) {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `⚠️ Error de conexión: ${err.message || "No se pudo comunicar con el asistente."}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        }
+      ]);
+    } finally {
+      setIsChatSending(false);
+    }
+  };
+
+  const scanClassroomQuestionsWithAI = async () => {
+    const currentTranscript = liveTranscriptRef.current || liveTranscript;
+    if (!currentTranscript || currentTranscript.trim().length < 15) {
+      setErrorMessage("La transcripción es muy corta para detectar preguntas del profesor. ¡Sigue hablando o grabando primero!");
+      return;
+    }
+
+    setIsDetectingQuestions(true);
+    try {
+      const scanPrompt = "Analiza la transcripción actual e identifica de 2 a 4 preguntas clave, inquietudes, dudas o conceptos de clase que el profesor o los oradores estén explicando o formulando. Devuelve únicamente una lista compacta en español donde cada pregunta aparezca en una línea nueva comenzando por un guion (-), por ejemplo: '- ¿Qué relación hay entre los átomos?'. No devuelvas explicaciones ni números, solo la lista de guiones.";
+      
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript: currentTranscript,
+          userMessage: scanPrompt,
+          apiKey: settings.apiKey
+        })
+      });
+
+      if (!response.ok) throw new Error("Fallo al escanear preguntas.");
+      const data = await response.json();
+      
+      const text = data.response || "";
+      const foundQuestions = text
+        .split("\n")
+        .map((line: string) => line.trim())
+        .filter((line: string) => line.startsWith("-") || line.startsWith("*"))
+        .map((line: string) => line.replace(/^[-*]\s*/, "").trim())
+        .filter((q: string) => q.length > 5);
+
+      if (foundQuestions.length > 0) {
+        setDetectedQuestions((prev) => {
+          const combined = Array.from(new Set([...prev, ...foundQuestions]));
+          return combined.slice(-5);
+        });
+      } else {
+        setErrorMessage("Todavía no se detectan preguntas o dudas explícitas en los últimos párrafos grabados.");
+      }
+    } catch (err: any) {
+      console.warn("AI Question scan failed:", err);
+      setErrorMessage("No se pudo escanear preguntas con IA en este momento.");
+    } finally {
+      setIsDetectingQuestions(false);
+    }
+  };
 
   // Cumulative speech recognition trackers
   const sessionFinalTranscriptRef = useRef("");
@@ -936,136 +1089,299 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="w-full flex flex-col items-center"
+                className="w-full"
               >
-                {/* 1. Snug Header Control Row: side-by-side components */}
-                <div className="flex flex-wrap items-center justify-between w-full max-w-2xl px-5 py-2.5 bg-slate-50/70 border border-slate-100 rounded-2xl mb-3 gap-3">
-                  {/* Left: Ping indicator & status label */}
-                  <div className="flex items-center space-x-2">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                    </span>
-                    <span className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider select-none">
-                      {isPaused ? "Captura Pausada" : "Captura en Curso"}
-                    </span>
-                  </div>
-
-                  {/* Center: Miniature, horizontal visualizer canvas */}
-                  <div className="w-24 h-6 bg-slate-100/50 border border-slate-205/10 rounded-md relative overflow-hidden flex items-center justify-center shrink-0">
-                    <canvas
-                      ref={canvasRef}
-                      width={120}
-                      height={24}
-                      className="w-full h-full block"
-                    />
-                    {isPaused && (
-                      <div className="absolute inset-0 bg-white/70 flex items-center justify-center text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                        Pausada
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right: Timer Clock (large & clear, yet space saving) */}
-                  <div className="text-sm font-bold text-[#2C5EAD] tracking-wider font-mono bg-white border border-slate-100 px-3 py-1 rounded-xl shadow-3xs">
-                    ⏱️ {formatTimer(duration)}
-                  </div>
-                </div>
-
-                {/* 2. HERO: LARGE CHAT-STYLE TRANSCRIPTION LOG CONTAINER */}
-                <div className="w-full max-w-2xl bg-[#FAF9F6] border border-slate-100/90 rounded-2xl p-4.5 mb-3.5 relative overflow-hidden flex flex-col items-stretch text-left shadow-xs">
+                {/* Dual Pane Grid Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch w-full">
                   
-                  {/* Box Header */}
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/40">
-                    <div className="flex items-center space-x-1.5 text-[10px] font-bold text-rose-500 uppercase tracking-widest">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse inline-block" />
-                      <span>Transcripción en Vivo Transmitiendo</span>
-                    </div>
-                    <span className="text-[10px] bg-[#135bf1]/5 border border-[#135bf1]/10 px-2 py-0.5 rounded-md font-bold text-[#135bf1]">
-                      {draftWordCount} palabras
-                    </span>
-                  </div>
-                  
-                  {/* Chat message dialog scroll window (tall and cozy) */}
-                  <div className="w-full h-80 overflow-y-auto font-sans scroll-smooth pr-1 flex flex-col justify-start" style={{ maxHeight: "320px", minHeight: "320px" }}>
+                  {/* LEFT COLUMN: LIVE TRANSCRIPTION (col-span-12 or lg:col-span-6) */}
+                  <div className="lg:col-span-6 flex flex-col items-stretch bg-slate-50/30 border border-slate-100 rounded-3xl p-5 relative">
                     
-                    <div className="flex items-start gap-3">
-                      {/* Avatar icon bubble resembling Olli Chat assistant */}
-                      <div className="w-8 h-8 rounded-full bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center font-bold text-xs shrink-0 select-none shadow-3p shadow-indigo-600/5">
-                        🎙️
+                    {/* Header Row */}
+                    <div className="flex flex-wrap items-center justify-between w-full px-4 py-2 bg-white/80 backdrop-blur-md border border-slate-100 rounded-2xl mb-4 gap-2 shadow-3xs">
+                      <div className="flex items-center space-x-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                          {isPaused ? "Captura Pausada" : "Captura Activa"}
+                        </span>
+                      </div>
+
+                      {/* Miniature Visualizer */}
+                      <div className="w-20 h-5 bg-slate-100/50 rounded-md relative overflow-hidden flex items-center justify-center shrink-0">
+                        <canvas
+                          ref={canvasRef}
+                          width={100}
+                          height={20}
+                          className="w-full h-full block"
+                        />
+                        {isPaused && (
+                          <div className="absolute inset-0 bg-white/70 flex items-center justify-center text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                            Pausada
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Timer Clock */}
+                      <div className="text-xs font-bold text-[#2C5EAD] tracking-wider font-mono bg-slate-50 px-2.5 py-0.5 rounded-lg border border-slate-100/65">
+                        ⏱️ {formatTimer(duration)}
+                      </div>
+                    </div>
+
+                    {/* LIVE CHAT-STYLE TRANSCRIPTION CONTAINER */}
+                    <div className="flex-1 bg-[#FAF9F6] border border-slate-200/50 rounded-2xl p-4 flex flex-col items-stretch text-left shadow-2xs">
+                      {/* Box Header */}
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/55">
+                        <div className="flex items-center space-x-1.5 text-[10px] font-bold text-rose-500 uppercase tracking-widest">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse inline-block" />
+                          <span>Transcripción de Clase en Vivo</span>
+                        </div>
+                        <span className="text-[10px] bg-[#135bf1]/5 border border-[#135bf1]/10 px-2 py-0.5 rounded-md font-bold text-[#135bf1]">
+                          {draftWordCount} palabras
+                        </span>
                       </div>
                       
-                      <div className="flex-grow bg-white border border-[#E9E9EB] p-4 rounded-2xl shadow-3xs transition-shadow">
-                        <p className="text-[9.5px] font-extrabold text-[#135bf1] uppercase tracking-widest mb-1.5 leading-none">
-                          Otter Olli Live Feed
-                        </p>
-                        
-                        <div className="text-xs text-slate-750 font-normal leading-relaxed font-sans whitespace-pre-wrap select-text">
-                          {liveTranscript || interimTranscript ? (
-                            <div className="space-y-1 bg-transparent pr-1">
-                              <span className="text-slate-800 font-normal">{liveTranscript}</span>
-                              {interimTranscript && (
-                                <span className="text-slate-400 italic font-medium"> {interimTranscript}</span>
+                      {/* Live Feed Dialog Scroll Window */}
+                      <div className="w-full overflow-y-auto font-sans scroll-smooth pr-1 flex flex-col justify-start" style={{ height: "300px", maxHeight: "300px", minHeight: "300px" }}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-full bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center font-bold text-xs shrink-0 select-none">
+                            🎙️
+                          </div>
+                          
+                          <div className="flex-grow bg-white border border-[#E9E9EB] p-4 rounded-2xl shadow-3xs">
+                            <p className="text-[9.5px] font-extrabold text-[#135bf1] uppercase tracking-widest mb-1.5 leading-none">
+                              Canal de Audio Directo / Clase
+                            </p>
+                            
+                            <div className="text-xs text-slate-750 font-normal leading-relaxed font-sans whitespace-pre-wrap select-text">
+                              {liveTranscript || interimTranscript ? (
+                                <div className="space-y-1 bg-transparent pr-1">
+                                  <span className="text-slate-800 font-normal">{liveTranscript}</span>
+                                  {interimTranscript && (
+                                    <span className="text-slate-400 italic font-medium"> {interimTranscript}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-slate-400 italic text-left py-12 flex flex-col items-center justify-center space-y-2 mt-4">
+                                  <span className="text-xl animate-bounce">💬</span>
+                                  <span className="text-[11px] font-medium text-slate-400">
+                                    Habla o captura audio para ver la transcripción en vivo aquí...
+                                  </span>
+                                </div>
                               )}
                             </div>
-                          ) : (
-                            <div className="text-slate-400 italic text-left py-12 flex flex-col items-center justify-center space-y-2 mt-4">
-                              <span className="text-xl animate-bounce">💬</span>
-                              <span className="text-[11px] font-medium text-slate-400">
-                                Di una frase para ver la transcripción en vivo...
-                              </span>
-                            </div>
-                          )}
+                          </div>
                         </div>
+                      </div>
+
+                      {/* Tool bar with Save state and download PDF */}
+                      <div className="w-full mt-3 pt-3 border-t border-slate-200/40 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                        <div className="flex items-center space-x-1.5 text-emerald-600 font-semibold">
+                          <Check className="w-3 h-3 stroke-[3px]" />
+                          <span>
+                            {isSyncingDraft 
+                              ? "Autoguardado..." 
+                              : `Sincronizado con la Bóveda`
+                            }
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={downloadLivePDF}
+                          disabled={!liveTranscript && !interimTranscript}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-[#2C5EAD] hover:bg-[#1591DC] text-white rounded-lg text-[9.5px] font-bold transition-all shadow-3xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
+                        >
+                          <FileDown className="w-3 h-3" />
+                          <span>Descargar PDF</span>
+                        </button>
                       </div>
                     </div>
 
-                  </div>
-
-                  {/* Live Sync and PDF generation toolbar (snug layout) */}
-                  <div className="w-full mt-3 pt-3 border-t border-slate-200/40 flex items-center justify-between text-[10.5px] text-slate-500 font-medium">
-                    <div className="flex items-center space-x-1.5 text-emerald-600 font-semibold">
-                      <Check className="w-3.5 h-3.5 stroke-[3px]" />
-                      <span className="animate-pulse">
-                        {isSyncingDraft 
-                          ? "Guardando en la Nube..." 
-                          : `Sincronización en la Nube (${Math.floor(duration / 60)}m / Próximo sync en 20m)`
-                        }
-                      </span>
+                    {/* Bottom controls */}
+                    <div className="flex items-center justify-center space-x-3 w-full border-t border-slate-100 pt-4 mt-4">
+                      <button
+                        onClick={pauseRecording}
+                        className="p-2 bg-white hover:bg-slate-50 rounded-full border border-slate-200 text-slate-600 hover:text-slate-800 transition-all cursor-pointer shadow-3xs active:scale-95"
+                        title={isPaused ? "Reanudar Sesión" : "Pausar Sesión"}
+                      >
+                        {isPaused ? <Play className="w-4 h-4 text-emerald-500 fill-emerald-500" /> : <Pause className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={stopRecording}
+                        className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full flex items-center space-x-2 font-bold text-[10.5px] uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Square className="w-3.5 h-3.5 fill-white" />
+                        <span>Terminar y Procesar</span>
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={downloadLivePDF}
-                      disabled={!liveTranscript && !interimTranscript}
-                      className="inline-flex items-center space-x-1 px-3 py-1.5 bg-[#2C5EAD] hover:bg-[#1591DC] text-white rounded-lg text-[10px] font-bold transition-all shadow-3xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
-                    >
-                      <FileDown className="w-3 h-3" />
-                      <span>Descargar Borrador (.pdf)</span>
-                    </button>
+
                   </div>
-                </div>
 
-                {/* 3. Snug Assistant Reassure line (compact to avoid overflow) */}
-                <p className="text-[10px] text-slate-400 text-center max-w-md leading-tight mb-3">
-                  Mantén esta pestaña abierta mientras grabas. Autoguardado seguro activo en segundo plano.
-                </p>
+                  {/* RIGHT COLUMN: INTERACTIVE AI Q&A COMPANION (col-span-12 or lg:col-span-6) */}
+                  <div className="lg:col-span-6 flex flex-col items-stretch bg-slate-50 border border-slate-200/60 rounded-3xl p-5 relative min-h-[480px]">
+                    
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 mb-3.5">
+                      <div className="flex items-center space-x-2">
+                        <GraduationCap className="w-4 h-4 text-[#135bf1]" />
+                        <div>
+                          <span className="text-xs font-bold text-[#111111] block leading-tight">Copiloto de Clase AI</span>
+                          <span className="text-[9px] text-[#135bf1] font-bold tracking-wide uppercase">Asistente en Tiempo Real</span>
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={scanClassroomQuestionsWithAI}
+                        disabled={isDetectingQuestions || (!liveTranscript && !interimTranscript)}
+                        className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border font-bold text-[10px] transition-all cursor-pointer ${
+                          isDetectingQuestions
+                            ? "bg-indigo-50 border-indigo-200 text-indigo-600"
+                            : "bg-white border-slate-200 text-slate-700 hover:border-[#135bf1] hover:text-[#135bf1] shadow-3xs"
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                      >
+                        {isDetectingQuestions ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                            <span>Escaneando Clase...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Search className="w-3 h-3 text-[#135bf1]" />
+                            <span>Identificar Dudas con IA</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
 
-                {/* 4. Controls toolbar (cozy bottom layout) */}
-                <div className="flex items-center justify-center space-x-3 w-full max-w-2xl pt-2 border-t border-slate-100">
-                  <button
-                    onClick={pauseRecording}
-                    className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-full border border-slate-200 text-slate-600 hover:text-slate-800 transition-all cursor-pointer shadow-3xs active:scale-95"
-                    title={isPaused ? "Reanudar Sesión" : "Pausar Sesión"}
-                  >
-                    {isPaused ? <Play className="w-4 h-4 text-emerald-500 fill-emerald-500" /> : <Pause className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={stopRecording}
-                    className="px-5 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full flex items-center space-x-2 font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-rose-500/10 hover:shadow-lg hover:shadow-rose-500/15 active:scale-95"
-                  >
-                    <Square className="w-3.5 h-3.5 fill-white" />
-                    <span>Terminar y Transcribir</span>
-                  </button>
+                    {/* DYNAMIC DETECTED QUESTIONS CHIPS */}
+                    <div className="mb-4 bg-white/70 border border-slate-200/45 p-3 rounded-xl">
+                      <p className="text-[9px] font-bold text-slate-550 uppercase tracking-widest mb-2 flex items-center space-x-1">
+                        <Sparkles className="w-2.5 h-2.5 text-[#135bf1] animate-pulse" />
+                        <span>Preguntas & Dudas Detectadas del Docente:</span>
+                      </p>
+                      
+                      {detectedQuestions.length === 0 ? (
+                        <p className="text-[10px] text-slate-400 italic">
+                          Ninguna duda detectada aún. El sistema analizará la acústica del profesor de forma continua, o presiona "Identificar Dudas" arriba.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto pr-1">
+                          {detectedQuestions.map((q, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                const cleanQ = q.replace(/^Pregunta\/Dato:\s*"/, "").replace(/"$/, "");
+                                handleSendLiveChat(`Responde a esta pregunta formulada en clase: "${cleanQ}"`);
+                              }}
+                              className="inline-flex items-center space-x-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100/50 hover:border-indigo-200/80 rounded-lg text-[9.5px] font-medium text-indigo-700 text-left transition-all cursor-pointer active:scale-95"
+                            >
+                              <HelpCircle className="w-2.5 h-2.5 shrink-0 text-indigo-500" />
+                              <span className="truncate max-w-[240px]">{q}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* CHAT MESSAGES PANEL */}
+                    <div 
+                      className="flex-1 overflow-y-auto space-y-3 pr-1 py-1 mb-4 border-b border-slate-200/50 flex flex-col justify-start"
+                      style={{ height: "240px", maxHeight: "240px" }}
+                    >
+                      {chatMessages.map((msg, i) => (
+                        <div
+                          key={i}
+                          className={`flex items-start gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+                        >
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 select-none ${
+                            msg.role === "user" ? "bg-slate-200 text-slate-700" : "bg-indigo-600/10 border border-indigo-100 text-indigo-700"
+                          }`}>
+                            {msg.role === "user" ? "👤" : "🤖"}
+                          </div>
+                          
+                          <div className={`p-3 rounded-2xl max-w-[85%] text-xs shadow-3xs transition-shadow ${
+                            msg.role === "user" 
+                              ? "bg-indigo-600 text-white rounded-tr-none text-right font-medium" 
+                              : "bg-white border border-slate-200/70 text-slate-800 rounded-tl-none text-left"
+                          }`}>
+                            <div className="whitespace-pre-wrap font-sans text-[11.5px] leading-relaxed">
+                              {msg.content}
+                            </div>
+                            
+                            {msg.timestamp && (
+                              <span className={`block text-[8px] mt-1 select-none font-medium ${msg.role === "user" ? "text-indigo-200" : "text-slate-400"}`}>
+                                {msg.timestamp}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {isChatSending && (
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center font-bold text-[10px] shrink-0 select-none">
+                            🤖
+                          </div>
+                          <div className="bg-white border border-slate-200/70 p-3 rounded-2xl rounded-tl-none shadow-3xs">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                              <span className="text-[10px] text-slate-400 font-bold ml-1">Buscando en la transcripción en vivo...</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* FLOATING SUGGESTIONS CHIPS */}
+                    <div className="flex items-center space-x-1.5 mb-2 overflow-x-auto py-1 scroll-smooth">
+                      <button
+                        type="button"
+                        onClick={() => handleSendLiveChat("Explícame resumidamente el último tema expuesto con ejemplos sencillos.")}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
+                      >
+                        💡 Explicar último concepto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSendLiveChat("¿Cuáles son las ideas clave o tareas importantes que se han mencionado explícitamente?")}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
+                      >
+                        📝 Tareas mencionadas
+                      </button>
+                    </div>
+
+                    {/* CHAT INPUT AREA */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSendLiveChat(chatInput);
+                      }}
+                      className="flex items-stretch gap-2"
+                    >
+                      <input
+                        type="text"
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        placeholder="Pregúntale al copiloto sobre la clase en vivo..."
+                        disabled={isChatSending}
+                        className="flex-grow bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#135bf1] transition-all disabled:opacity-50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isChatSending || !chatInput.trim()}
+                        className="px-3 py-2 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </form>
+
+                  </div>
+
                 </div>
               </motion.div>
             )}
