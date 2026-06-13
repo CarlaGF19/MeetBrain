@@ -64,187 +64,189 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
   };
 
   return (
-    <div id="login_screen_wrapper" className="min-h-screen w-full bg-[#f7f9fb] flex items-stretch justify-center select-none font-sans relative overflow-hidden">
+    <div id="login_screen_wrapper" className="min-h-screen w-full bg-gradient-to-tr from-[#020617] via-[#0b1329] to-[#040815] flex items-stretch justify-center select-none font-sans relative overflow-hidden p-4 sm:p-8">
       
-      {/* Decorative Brand Light Orbs representing Lumina Ambient Glow */}
-      <div className="absolute top-[-80px] left-[-80px] w-96 h-96 bg-[#004ac6]/5 rounded-full filter blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-[-100px] right-[-100px] w-[450px] h-[450px] bg-[#fea619]/4 rounded-full filter blur-[120px] pointer-events-none" />
+      {/* Dynamic Glowing Ambient Light Orbs for Glassmorphism Background depth */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-gradient-to-tr from-[#004ac6]/20 to-[#2563eb]/5 filter blur-[120px] pointer-events-none animate-[pulse_8s_infinite_alternate]" />
+      <div className="absolute bottom-[-15%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-gradient-to-bl from-[#fea619]/10 to-transparent filter blur-[150px] pointer-events-none animate-[pulse_10s_infinite_alternate]" />
+      <div className="absolute top-[40%] left-[30%] w-[30vw] h-[30vw] rounded-full bg-[#00ffcc]/5 filter blur-[100px] pointer-events-none animate-[pulse_12s_infinite]" />
 
-      {/* Main Container with 12 Column Layout */}
+      {/* Main Container - Full viewport glass frame */}
       <motion.div
         id="desktop_login_card"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full min-h-screen bg-[#f7f9fb] overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="w-full max-w-7xl mx-auto bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10 shadow-[0_24px_80px_rgba(0,0,0,0.4)] my-auto self-center"
       >
         
-        {/* LEFT COLUMN (7 Cols) - Lumina Branding & Interactive Highlights */}
-        <div className="lg:col-span-7 bg-[#ffffff] border-r border-[#eceef0] p-8 sm:p-16 flex flex-col justify-between relative overflow-y-auto">
+        {/* LEFT COLUMN (7 Cols) - Olli Value Prop & Glassmorphic Tiles */}
+        <div className="lg:col-span-7 p-8 sm:p-14 lg:p-16 flex flex-col justify-between relative overflow-y-auto">
           
           {/* Header Brand */}
-          <div className="flex items-center gap-2 text-left mb-8 lg:mb-0">
-            <div className="flex items-center justify-center gap-1 shrink-0">
-              <span className="w-1.5 h-6 rounded-full bg-[#004ac6] animate-[pulse_2s_infinite]" />
-              <span className="w-1.5 h-4 rounded-full bg-[#004ac6]/60 animate-[pulse_1.5s_infinite]" />
-              <span className="w-1.5 h-5 rounded-full bg-[#004ac6]/80 animate-[pulse_1.8s_infinite]" />
+          <div className="flex items-center gap-2.5 text-left mb-10 lg:mb-0">
+            <div className="flex items-center justify-center gap-1 shrink-0 bg-white/5 px-3 py-2.5 rounded-xl border border-white/10 shadow-inner">
+              <span className="w-1 h-6 rounded-full bg-[#004ac6] animate-[pulse_1.2s_infinite]" />
+              <span className="w-1 h-4 rounded-full bg-[#00a8e8] animate-[pulse_1.5s_infinite]" />
+              <span className="w-1 h-5 rounded-full bg-[#2563eb] animate-[pulse_1.8s_infinite]" />
+              <span className="w-1 h-3 rounded-full bg-[#a855f7] animate-[pulse_1.4s_infinite]" />
             </div>
             <div>
-              <span className="font-display font-extrabold text-2xl tracking-tighter text-[#191c1e] flex items-center">
-                Olli<span className="text-[#004ac6] ml-[1px] font-extrabold">.</span>
+              <span className="font-display font-black text-2xl tracking-tighter text-white flex items-center">
+                Olli<span className="text-[#00a8e8] ml-[1px] font-black">.</span>
               </span>
             </div>
           </div>
-
+ 
           {/* Main Info Hero */}
-          <div className="max-w-xl mx-auto w-full my-auto py-10 text-left">
+          <div className="max-w-xl w-full my-auto py-8 text-left">
             
-            {/* Minimalist Pill Accent */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#2563eb]/8 border border-[#2563eb]/15 text-[#004ac6] text-xs font-semibold mb-6">
-              <Cpu className="w-3.5 h-3.5" />
-              <span>Transcriptor de Reuniones Avanzado</span>
-            </div>
-
-            {/* Title corresponding to Headline-LG */}
-            <h1 className="font-display text-3xl sm:text-[34px] font-extrabold text-[#191c1e] tracking-tight leading-[40px] sm:leading-[44px]">
-              Revoluciona tus reuniones con <span className="text-[#004ac6] relative inline-block">inteligencia pura.</span>
+            {/* Title corresponding to Headline-LG with gorgeous clip gradient */}
+            <h1 className="font-display text-3xl sm:text-[42px] font-black text-white tracking-tight leading-[44px] sm:leading-[52px]">
+              Revoluciona tus <br />
+              reuniones con <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-[#fea619] animate-gradient">
+                inteligencia pura.
+              </span>
             </h1>
 
             {/* Body Description corresponding to Body-LG */}
-            <p className="font-sans text-base text-[#434655] font-normal mt-4 leading-relaxed max-w-lg">
-              Transforma el caos en claridad. Olli estructura tus conversaciones directamente en decisiones y planes de acción procesables al instante. No vuelvas a perder un solo detalle de tus juntas de trabajo.
+            <p className="font-sans text-sm sm:text-base text-slate-300 font-light mt-4 leading-relaxed max-w-lg">
+              Transforma el caos en claridad. Olli estructura tus conversaciones directamente en decisiones y planes de acción procesables al instante.
             </p>
 
-            {/* Feature Bento Grid with standard (Level 1) & AI-Tinted Surfaces */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-10">
+            {/* Feature Bento Grid with Glassmorphic blocks */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
               
-              {/* Feature 1: Live Record (Level 1 Card, white with soft shadow) */}
-              <div className="p-5 bg-white rounded-2xl border border-[#e2e8f0] shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-lg bg-[#004ac6]/8 flex items-center justify-center text-[#004ac6] mb-3">
+              {/* Feature 1: Live Record */}
+              <div className="p-5 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3">
                   <Mic className="w-5 h-5" />
                 </div>
-                <h3 className="font-display text-sm font-semibold text-[#191c1e]">Captura Precisa</h3>
-                <p className="font-sans text-[12px] text-[#434655] mt-1 leading-normal">
-                  Grabación instantánea y transcripción automática en tiempo real de voz alta fidelidad.
+                <h3 className="font-display text-sm font-semibold text-white">Captura Precisa</h3>
+                <p className="font-sans text-[12px] text-slate-400 mt-1 leading-normal">
+                  Transcripción en tiempo real impulsada por IA, sin perder un solo detalle crítico.
                 </p>
               </div>
 
-              {/* Feature 2: Structured Document (Level 1 Card) */}
-              <div className="p-5 bg-white rounded-2xl border border-[#e2e8f0] shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-lg bg-[#004ac6]/8 flex items-center justify-center text-[#004ac6] mb-3">
+              {/* Feature 2: Structured Document */}
+              <div className="p-5 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-3">
                   <FileText className="w-5 h-5" />
                 </div>
-                <h3 className="font-display text-sm font-semibold text-[#191c1e]">Síntesis Automática</h3>
-                <p className="font-sans text-[12px] text-[#434655] mt-1 leading-normal">
-                  Minutas con formatos perfectos en Markdown con asignación inteligente de tareas.
+                <h3 className="font-display text-sm font-semibold text-white">Síntesis Automática</h3>
+                <p className="font-sans text-[12px] text-slate-400 mt-1 leading-normal">
+                  Generación instantánea de resúmenes estructurados y tareas asignables.
                 </p>
               </div>
 
-              {/* Feature 3: Copilot (AI-Tinted Surface - light amber background and alert highlights) */}
-              <div className="p-5 bg-[#fffbeb] rounded-2xl border border-[#fef3c7] shadow-[0_4px_12px_rgba(254,166,25,0.03)] hover:shadow-[0_4px_16px_rgba(254,166,25,0.07)] transition-all duration-300 relative overflow-hidden group">
-                <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-[#fea619]/15 text-[#855300] text-[9.5px] font-bold uppercase tracking-wider">
-                  Sugerido
-                </div>
-                <div className="w-9 h-9 rounded-lg bg-[#fea619]/14 flex items-center justify-center text-[#fea619] mb-3">
+              {/* Feature 3: Copilot */}
+              <div className="p-5 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#fea619] mb-3">
                   <Bot className="w-5 h-5" />
                 </div>
-                <h3 className="font-display text-sm font-semibold text-[#855300]">Copiloto Conversacional</h3>
-                <p className="font-sans text-[12px] text-[#855300]/90 mt-1 leading-normal">
-                  Chatea con tus transcripciones de audio para extraer insights estratégicos en segundos.
+                <h3 className="font-display text-sm font-semibold text-white">IA Conversacional</h3>
+                <p className="font-sans text-[12px] text-slate-400 mt-1 leading-normal">
+                  Interactúa con tus transcripciones para extraer insights ocultos al instante.
                 </p>
               </div>
 
-              {/* Feature 4: High Reliability Protection (Level 1 Card) */}
-              <div className="p-5 bg-white rounded-2xl border border-[#e2e8f0] shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.04)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-lg bg-[#006242]/8 flex items-center justify-center text-[#006242] mb-3">
+              {/* Feature 4: High Reliability Protection */}
+              <div className="p-5 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
-                <h3 className="font-display text-sm font-semibold text-[#191c1e]">Seguridad Absoluta</h3>
-                <p className="font-sans text-[12px] text-[#434655] mt-1 leading-normal">
-                  Infraestructura segura administrada de extremo a extremo sin almacenamiento público.
+                <h3 className="font-display text-sm font-semibold text-white">Seguridad Total</h3>
+                <p className="font-sans text-[12px] text-slate-400 mt-1 leading-normal">
+                  Infraestructura blindada para mantener la confidencialidad absoluta de tus datos.
                 </p>
               </div>
 
             </div>
           </div>
 
-          {/* Footer Metadata removed per user request */}
+          <div className="text-left text-[11px] text-slate-500 font-light mt-6 lg:block hidden">
+            <span>Tecnología inteligente integrada con Olli IA.</span>
+          </div>
 
         </div>
 
-        {/* RIGHT COLUMN (5 Cols) - Clean Minimalist Google Authentication Terminal (Tonal Layer 2 Card) */}
-        <div className="lg:col-span-5 p-8 sm:p-16 flex flex-col justify-center items-stretch bg-[#f7f9fb] relative">
+        {/* RIGHT COLUMN (5 Cols) - Vibrant Glowing Blue-Cyan Glassmorphic Portal */}
+        <div className="lg:col-span-5 p-6 sm:p-14 lg:p-16 flex flex-col justify-center items-stretch bg-white/[0.01] border-l border-white/5 relative">
           
           <div className="my-auto max-w-sm mx-auto w-full">
             
-            {/* Level 2 Login Portal Card */}
-            <div className="bg-white rounded-2xl border border-[#eceef0] p-8 shadow-[0_12px_32px_rgba(0,0,0,0.03)] text-center relative overflow-hidden">
+            {/* Glowing Blue-Cyan Neon Glassmorphism Card */}
+            <div className="bg-gradient-to-b from-[#004ac6]/90 via-[#0053db]/95 to-[#00a8e8]/90 backdrop-blur-2xl rounded-3xl border border-white/25 p-8 shadow-[0_20px_50px_rgba(0,168,232,0.25)] text-center relative overflow-hidden">
               
-              {/* Top Accent line or indicator */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-[#004ac6]" />
+              {/* Highlight Overlay effect */}
+              <div className="absolute inset-0 bg-linear-to-tr from-white/0 via-white/5 to-white/15 pointer-events-none" />
 
-              {/* Secure lock illustration tailored to Lumina System specs */}
-              <div className="w-12 h-12 bg-[#004ac6]/10 rounded-xl flex items-center justify-center text-[#004ac6] mb-5 mx-auto shadow-xs">
-                <Lock className="w-5 h-5 text-[#004ac6]" />
+              {/* Top Accent line */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
+
+              {/* Secure Fingerprint block */}
+              <div className="w-14 h-14 bg-black/15 border border-white/15 rounded-2xl flex items-center justify-center text-white mb-6 mx-auto shadow-inner">
+                <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12C2 6.5 6.5 2 12 2s10 4.5 10 10" />
+                  <path d="M5 19.5C6.9 21 9.4 22 12 22s5.1-1 7-2.5" />
+                  <path d="M12 11V7" />
+                  <path d="M8 14v-3c0-2.2 1.8-4 4-4s4 1.8 4 4v3" />
+                  <path d="M12 18h.01" />
+                  <circle cx="12" cy="14" r="2" />
+                </svg>
               </div>
 
               {/* High Contrast Headings */}
-              <h2 className="font-display text-xl font-bold text-[#191c1e] tracking-tight">
+              <h2 className="font-display text-2xl font-bold text-white tracking-tight">
                 Acceso Restringido
               </h2>
-              <p className="font-sans text-xs text-[#434655] mt-2 leading-relaxed">
+              <p className="font-sans text-xs text-blue-100/80 mt-2.5 leading-relaxed">
                 Ingresa para sincronizar tus espacios de trabajo y continuar donde lo dejaste.
               </p>
 
               <div className="mt-8 space-y-4">
                 
-                {/* Main Google Sign-In Button (Solid Action Blue as per Buttons Token) */}
+                {/* Main Google Sign-In Button (Solid white with animated hover) */}
                 <motion.button
                   type="button"
                   id="google_signin_btn"
                   onClick={handleGoogleOAuth}
                   disabled={isLoading}
+                  whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full bg-[#004ac6] hover:bg-[#003ea8] text-white font-semibold py-3 px-5 rounded-lg shadow-sm flex items-center justify-center gap-3 transition-colors text-xs cursor-pointer select-none disabled:opacity-75 h-11"
+                  className="w-full bg-[#ffffff] hover:bg-slate-50 text-slate-900 font-semibold py-3 px-5 rounded-xl shadow-[0_8px_20px_rgba(0,0,0,0.15)] flex items-center justify-center gap-3.5 transition-all text-sm cursor-pointer select-none disabled:opacity-75 h-12"
                 >
                   {isLoading ? (
-                    <span className="border-2 border-white/20 border-t-white rounded-full w-4 h-4 animate-spin" />
+                    <span className="border-2 border-slate-900/20 border-t-slate-900 rounded-full w-5 h-5 animate-spin" />
                   ) : (
                     <>
-                      <div className="w-5 h-5 rounded bg-white flex items-center justify-center shrink-0">
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                      <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24">
                           <path
                             fill="#EA4335"
                             d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.14-5.136 4.14-3.41 0-6.173-2.784-6.173-6.225s2.763-6.226 6.173-6.226c1.55 0 2.96.568 4.05 1.503l3.056-3.055C19.123 2.115 15.935 1 12.24 1 6.13 1 1.135 6 1.135 12.16s4.996 11.16 11.105 11.16c6.07 0 10.99-4.8 10.99-11.16 0-.6-.051-1.2-.162-1.875H12.24z"
                           />
                         </svg>
                       </div>
-                      <span>Iniciar sesión con Google</span>
+                      <span className="tracking-tight text-slate-900 font-bold">Iniciar sesión con Google</span>
                     </>
                   )}
                 </motion.button>
 
-                {/* Simulated Secondary action as a blueprint element */}
-                <div className="text-center pt-2">
-                  <span className="text-[10px] text-[#737686] font-medium leading-normal block">
-                    ¿No tienes una cuenta corporativa? <br/>
-                    <span className="text-[#004ac6] hover:underline cursor-pointer">Consulta con administración</span>
-                  </span>
-                </div>
-
               </div>
 
-              {/* Alert Status for interactive experiences */}
-              <div className="min-h-[40px] mt-6 flex items-center justify-center">
+              {/* Interactive Alert Panels for Popups or Failures */}
+              <div className="min-h-[48px] mt-6 flex items-center justify-center">
                 <AnimatePresence mode="wait">
                   {error && (
                     <motion.div
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="bg-[#ba1a1a]/5 border border-[#ba1a1a]/15 rounded-lg p-3 text-[11px] font-medium text-[#ba1a1a] flex items-start space-x-2 text-left w-full"
+                      className="bg-black/25 border border-white/10 rounded-xl p-3 text-[11px] font-medium text-white flex items-start space-x-2 text-left w-full shadow-inner"
                     >
-                      <AlertCircle className="w-4 h-4 text-[#ba1a1a] shrink-0 mt-0.5" />
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                       <span>{error}</span>
                     </motion.div>
                   )}
@@ -254,9 +256,9 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="bg-[#004ac6]/5 border border-[#eceef0] rounded-lg p-3 text-[11px] font-medium text-[#004ac6] flex items-start space-x-2 text-left w-full"
+                      className="bg-black/20 border border-white/10 rounded-xl p-3 text-[11px] font-medium text-blue-100 flex items-start space-x-2 text-left w-full"
                     >
-                      <Info className="w-4 h-4 text-[#004ac6] shrink-0 mt-0.5" />
+                      <Info className="w-4 h-4 text-cyan-300 shrink-0 mt-0.5" />
                       <span>{infoMessage}</span>
                     </motion.div>
                   )}
@@ -264,8 +266,8 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                   {!error && !infoMessage && (
                     <motion.span
                       initial={{ opacity: 0 }}
-                      animate={{ opacity: 0.7 }}
-                      className="text-[10px] text-[#737686] font-medium leading-relaxed block"
+                      animate={{ opacity: 0.8 }}
+                      className="text-[10px] text-blue-100/85 font-normal leading-relaxed block text-center"
                     >
                       🔐 Autenticación segura gestionada a través de Google. Tus datos están protegidos.
                     </motion.span>
@@ -274,8 +276,6 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
               </div>
 
             </div>
-
-            {/* Mobile Footer Metadata removed per user request */}
 
           </div>
 
