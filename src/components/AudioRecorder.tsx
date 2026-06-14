@@ -444,8 +444,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         streamRef.current = stream;
       }
 
-      // Instantiate HTML MediaRecorder
-      const options = { mimeType: "audio/webm" };
+      // Instantiate HTML MediaRecorder (optimized bitrate for voice recording)
+      const options = { mimeType: "audio/webm", audioBitsPerSecond: 64000 };
       let mediaRecorder: MediaRecorder;
       try {
         mediaRecorder = new MediaRecorder(stream, options);
@@ -480,9 +480,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       setIsPaused(false);
       startVisualizer(stream);
 
-      // Web Speech API for Real-time Live Transcription
+      // Web Speech API for Real-time Live Transcription (only for microphone source)
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
+      if (SpeechRecognition && captureSource === "mic") {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
@@ -784,9 +784,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         } catch (e) {
           // Fallback to analyze raw HTML / text or custom status errors from proxy layers like Vercel
           if (rawText.includes("Payload Too Large") || response.status === 413) {
-            errorMsg = "El audio es demasiado pesado. Las funciones sin servidor de Vercel limitan las subida a 4.5 MB. Por favor realiza grabaciones de menor duración.";
-          } else if (response.status === 504 || response.status === 502 || rawText.toLowerCase().includes("timeout")) {
-            errorMsg = "La solicitud de transcripción con Gemini ha superado el tiempo límite de ejecución en Vercel (límite por defecto de 10-60 segundos). Intenta grabar un audio más corto.";
+            errorMsg = "El audio es demasiado pesado. Las funciones sin servidor de Vercel limitan las subidas a 4.5 MB. Por favor realiza grabaciones de menor duración.";
+          } else if (response.status === 504 || response.status === 502 || rawText.toLowerCase().includes("timeout") || rawText.includes("FUNCTION_INVOCATION_FAILED")) {
+            errorMsg = "La transcripción superó el límite de tiempo (timeout) de Vercel. En cuentas gratuitas (Hobby), Vercel limita la ejecución de funciones a 10 segundos. Para grabar sesiones más largas, te sugerimos correr la aplicación de forma local (con 'npm run dev') o en un servidor dedicado.";
           } else {
             errorMsg = `Error en el servidor de transacciones (Estado ${response.status}). Detalle: ${rawText.substring(0, 150)}...`;
           }
@@ -1319,7 +1319,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 rounded-full bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center font-bold text-xs shrink-0 select-none">
-                            🎙️
+                            {captureSource === "screen" ? "🔊" : "🎙️"}
                           </div>
                           
                           <div className="flex-grow bg-white border border-[#E9E9EB] p-4 rounded-2xl shadow-3xs">
@@ -1334,7 +1334,17 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                   <span className="flex-1">{speechErrorNotice}</span>
                                 </div>
                               )}
-                              {liveTranscript || interimTranscript ? (
+                              {captureSource === "screen" ? (
+                                <div className="text-slate-500 text-left py-12 flex flex-col items-center justify-center space-y-3 mt-4 px-4">
+                                  <span className="text-3xl animate-pulse">💻🔊</span>
+                                  <span className="text-xs font-bold text-[#2C5EAD] uppercase tracking-wider">
+                                    Capturando Audio Digital
+                                  </span>
+                                  <span className="text-[11px] font-medium text-slate-400 text-center leading-relaxed">
+                                    Grabación de audio de pestaña/pantalla activa en segundo plano. La transcripción completa y el resumen se generarán con Gemini AI al hacer clic en <strong>"Terminar y Procesar"</strong>.
+                                  </span>
+                                </div>
+                              ) : liveTranscript || interimTranscript ? (
                                 <div className="space-y-1 bg-transparent pr-1">
                                   <span className="text-slate-800 font-normal">{liveTranscript}</span>
                                   {interimTranscript && (
@@ -1345,7 +1355,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                 <div className="text-slate-400 italic text-left py-12 flex flex-col items-center justify-center space-y-2 mt-4">
                                   <span className="text-xl animate-bounce">💬</span>
                                   <span className="text-[11px] font-medium text-slate-400">
-                                    Habla o captura audio para ver la transcripción en vivo aquí...
+                                    Habla para ver la transcripción en vivo aquí...
                                   </span>
                                 </div>
                               )}
