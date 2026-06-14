@@ -111,6 +111,9 @@ export default function App() {
   // Mobile menu control toggler
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Sidebar collapse state (closed/collapsed by default)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+
   // 1. Restore local user session from cache on mount
   useEffect(() => {
     const savedUser = localStorage.getItem("mb_user");
@@ -174,7 +177,7 @@ export default function App() {
             await saveUserSettingsToCloud(user.uid, loaded);
           }
         } else {
-          const savedSettings = localStorage.getItem("mb_settings");
+          const savedSettings = localStorage.getItem(`mb_settings_${user.uid}`);
           if (savedSettings) {
             const parsed = JSON.parse(savedSettings);
             const loaded = {
@@ -184,7 +187,12 @@ export default function App() {
             setSettings(loaded);
             await saveUserSettingsToCloud(user.uid, loaded);
           } else {
-            await saveUserSettingsToCloud(user.uid, settings);
+            const cleanSettings = {
+              ...settings,
+              apiKey: "",
+            };
+            setSettings(cleanSettings);
+            await saveUserSettingsToCloud(user.uid, cleanSettings);
           }
         }
       } catch (err) {
@@ -237,13 +245,15 @@ export default function App() {
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
     setSettings(newSettings);
-    localStorage.setItem("mb_settings", JSON.stringify(newSettings));
     if (user) {
+      localStorage.setItem(`mb_settings_${user.uid}`, JSON.stringify(newSettings));
       try {
         await saveUserSettingsToCloud(user.uid, newSettings);
       } catch (err) {
         console.error("Failed to sync settings with Cloud:", err);
       }
+    } else {
+      localStorage.setItem("mb_settings", JSON.stringify(newSettings));
     }
   };
 
@@ -442,7 +452,7 @@ export default function App() {
     return (
       <OnboardingScreen
         user={user}
-        showSkip={visitCount > 1}
+        showSkip={true}
         onSkip={() => {
           setOnboardingSkipped(true);
           localStorage.setItem(`onboarding_skipped_v1_${user.uid}`, "true");
@@ -460,7 +470,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white flex text-slate-900 font-sans antialiased overflow-x-hidden">
       
-      {/* Desktop sidebar navigation */}
       <Sidebar
         user={user}
         activeTab={activeTab}
@@ -471,10 +480,14 @@ export default function App() {
         onLogout={handleLogout}
         favoritesCount={favoritesCount}
         meetings={meetings}
+        isCollapsed={sidebarCollapsed}
+        setIsCollapsed={setSidebarCollapsed}
       />
 
       {/* Main Viewport Container */}
-      <div className="flex-grow flex flex-col md:pl-64 min-h-screen">
+      <div className={`flex-grow flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
+        sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[260px]"
+      }`}>
         
         {/* Responsive Mobile Headbar Banner */}
         <header className="md:hidden bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-xs">

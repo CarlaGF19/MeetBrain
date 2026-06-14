@@ -47,6 +47,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const [interimTranscript, setInterimTranscript] = useState("");
 
   // Live Copilot chat states
+  const [isCopilotActive, setIsCopilotActive] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string; timestamp?: string }>>([
     {
       role: "assistant",
@@ -1409,165 +1410,217 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
                   {/* RIGHT COLUMN: INTERACTIVE AI Q&A COMPANION (col-span-12 or lg:col-span-6) */}
                   <div className="lg:col-span-6 flex flex-col items-stretch bg-slate-50 border border-slate-200/60 rounded-3xl p-5 relative min-h-[680px]">
-                    
-                    {/* Header */}
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 mb-3.5">
-                      <div className="flex items-center space-x-2">
-                        <GraduationCap className="w-4 h-4 text-[#135bf1]" />
-                        <div>
-                          <span className="text-xs font-bold text-[#111111] block leading-tight">Copiloto de Clase AI</span>
-                          <span className="text-[9px] text-[#135bf1] font-bold tracking-wide uppercase">Asistente en Tiempo Real</span>
+                    {!isCopilotActive ? (
+                      <>
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 mb-3.5">
+                          <div className="flex items-center space-x-2">
+                            <GraduationCap className="w-4 h-4 text-slate-450" />
+                            <div>
+                              <span className="text-xs font-bold text-slate-500 block leading-tight">Copiloto de Clase AI</span>
+                              <span className="text-[9px] text-slate-400 font-bold tracking-wide uppercase">Modo Ahorro</span>
+                            </div>
+                          </div>
+                          <span className="text-[9.5px] bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-md font-bold text-emerald-650">
+                            Ahorro de API Activo
+                          </span>
                         </div>
-                      </div>
-                      
-                      <button
-                        onClick={scanClassroomQuestionsWithAI}
-                        disabled={isDetectingQuestions || (!liveTranscript && !interimTranscript)}
-                        className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border font-bold text-[10px] transition-all cursor-pointer ${
-                          isDetectingQuestions
-                            ? "bg-indigo-50 border-indigo-200 text-indigo-600"
-                            : "bg-white border-slate-200 text-slate-700 hover:border-[#135bf1] hover:text-[#135bf1] shadow-3xs"
-                        } disabled:opacity-40 disabled:cursor-not-allowed`}
-                      >
-                        {isDetectingQuestions ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
-                            <span>Escaneando Clase...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Search className="w-3 h-3 text-[#135bf1]" />
-                            <span>Identificar Dudas con IA</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
 
-                    {/* DYNAMIC DETECTED QUESTIONS CHIPS */}
-                    <div className="mb-4 bg-white/70 border border-slate-200/45 p-3 rounded-xl">
-                      <p className="text-[9px] font-bold text-slate-550 uppercase tracking-widest mb-2 flex items-center space-x-1">
-                        <Sparkles className="w-2.5 h-2.5 text-[#135bf1] animate-pulse" />
-                        <span>Preguntas & Dudas Detectadas del Docente:</span>
-                      </p>
-                      
-                      {detectedQuestions.length === 0 ? (
-                        <p className="text-[10px] text-slate-400 italic">
-                          Ninguna duda detectada aún. El sistema analizará la acústica del profesor de forma continua, o presiona "Identificar Dudas" arriba.
-                        </p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto pr-1">
-                          {detectedQuestions.map((q, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                const cleanQ = q.replace(/^Pregunta\/Dato:\s*"/, "").replace(/"$/, "");
-                                handleSendLiveChat(`Responde a esta pregunta formulada en clase: "${cleanQ}"`);
-                              }}
-                              className="inline-flex items-center space-x-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100/50 hover:border-indigo-200/80 rounded-lg text-[9.5px] font-medium text-indigo-700 text-left transition-all cursor-pointer active:scale-95"
-                            >
-                              <HelpCircle className="w-2.5 h-2.5 shrink-0 text-indigo-500" />
-                              <span className="truncate max-w-[240px]">{q}</span>
-                            </button>
-                          ))}
+                        {/* Ahorro Body */}
+                        <div className="flex-grow flex flex-col items-center justify-center text-center p-6 my-auto">
+                          <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100/60 flex items-center justify-center text-indigo-550 mb-5 shadow-xs relative overflow-hidden animate-[pulse_4s_infinite]">
+                            <Cpu className="w-7 h-7 text-[#135bf1] relative z-10" />
+                            <div className="absolute inset-0 bg-gradient-to-tr from-[#135bf1]/10 to-transparent pointer-events-none" />
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-800 tracking-tight">Copiloto en Modo Ahorro</h4>
+                          <p className="text-xs text-slate-500 leading-relaxed mt-2.5 max-w-xs">
+                            El asistente inteligente en tiempo real está inactivo por defecto para **evitar el consumo y llamadas innecesarias a tu API de Gemini**.
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-1.5 max-w-xs">
+                            Actívalo para identificar dudas del docente, formular preguntas y chatear directamente con la clase grabada.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setIsCopilotActive(true)}
+                            className="mt-6 px-5 py-2.5 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-xl font-bold text-[10.5px] uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-yellow-305 animate-pulse" />
+                            <span>Activar Asistente Copiloto</span>
+                          </button>
                         </div>
-                      )}
-                    </div>
-
-                    {/* CHAT MESSAGES PANEL */}
-                    <div 
-                      ref={chatScrollRef}
-                      className="flex-1 overflow-y-auto space-y-3 pr-1 py-1 mb-4 border-b border-slate-200/50 flex flex-col justify-start"
-                      style={{ height: "440px", maxHeight: "440px" }}
-                    >
-                      {chatMessages.map((msg, i) => (
-                        <div
-                          key={i}
-                          className={`flex items-start gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
-                        >
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 select-none ${
-                            msg.role === "user" ? "bg-slate-200 text-slate-700" : "bg-indigo-600/10 border border-indigo-100 text-indigo-700"
-                          }`}>
-                            {msg.role === "user" ? "👤" : "🤖"}
+                      </>
+                    ) : (
+                      <>
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 mb-3.5">
+                          <div className="flex items-center space-x-2">
+                            <GraduationCap className="w-4 h-4 text-[#135bf1]" />
+                            <div>
+                              <span className="text-xs font-bold text-[#111111] block leading-tight">Copiloto de Clase AI</span>
+                              <span className="text-[9px] text-[#135bf1] font-bold tracking-wide uppercase">Asistente en Tiempo Real</span>
+                            </div>
                           </div>
                           
-                          <div className={`p-3 rounded-2xl max-w-[85%] text-xs shadow-3xs transition-shadow ${
-                            msg.role === "user" 
-                              ? "bg-indigo-600 text-white rounded-tr-none text-right font-medium" 
-                              : "bg-white border border-slate-200/70 text-slate-800 rounded-tl-none text-left"
-                          }`}>
-                            <div className="whitespace-pre-wrap font-sans text-[11.5px] leading-relaxed">
-                              {msg.content}
-                            </div>
-                            
-                            {msg.timestamp && (
-                              <span className={`block text-[8px] mt-1 select-none font-medium ${msg.role === "user" ? "text-indigo-200" : "text-slate-400"}`}>
-                                {msg.timestamp}
-                              </span>
-                            )}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setIsCopilotActive(false)}
+                              className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[9px] font-bold text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+                            >
+                              Pausar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={scanClassroomQuestionsWithAI}
+                              disabled={isDetectingQuestions || (!liveTranscript && !interimTranscript)}
+                              className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg border font-bold text-[9px] transition-all cursor-pointer ${
+                                isDetectingQuestions
+                                  ? "bg-indigo-50 border-indigo-200 text-indigo-600"
+                                  : "bg-white border-slate-200 text-slate-700 hover:border-[#135bf1] hover:text-[#135bf1] shadow-3xs"
+                              } disabled:opacity-40 disabled:cursor-not-allowed`}
+                            >
+                              {isDetectingQuestions ? (
+                                <>
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin text-indigo-600" />
+                                  <span>Escaneando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Search className="w-2.5 h-2.5 text-[#135bf1]" />
+                                  <span>Identificar Dudas</span>
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
-                      ))}
 
-                      {isChatSending && (
-                        <div className="flex items-start gap-2.5">
-                          <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center font-bold text-[10px] shrink-0 select-none">
-                            🤖
-                          </div>
-                          <div className="bg-white border border-slate-200/70 p-3 rounded-2xl rounded-tl-none shadow-3xs">
-                            <div className="flex items-center space-x-1.5">
-                              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                              <span className="text-[10px] text-slate-400 font-bold ml-1">Buscando en la transcripción en vivo...</span>
+                        {/* DYNAMIC DETECTED QUESTIONS CHIPS */}
+                        <div className="mb-4 bg-white/70 border border-slate-200/45 p-3 rounded-xl">
+                          <p className="text-[9px] font-bold text-slate-550 uppercase tracking-widest mb-2 flex items-center space-x-1">
+                            <Sparkles className="w-2.5 h-2.5 text-[#135bf1] animate-pulse" />
+                            <span>Preguntas & Dudas Detectadas del Docente:</span>
+                          </p>
+                          
+                          {detectedQuestions.length === 0 ? (
+                            <p className="text-[10px] text-slate-400 italic">
+                              Ninguna duda detectada aún. El sistema analizará la acústica del profesor de forma continua, o presiona "Identificar Dudas" arriba.
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto pr-1">
+                              {detectedQuestions.map((q, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    const cleanQ = q.replace(/^Pregunta\/Dato:\s*"/, "").replace(/"$/, "");
+                                    handleSendLiveChat(`Responde a esta pregunta formulada en clase: "${cleanQ}"`);
+                                  }}
+                                  className="inline-flex items-center space-x-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100/50 hover:border-indigo-200/80 rounded-lg text-[9.5px] font-medium text-indigo-700 text-left transition-all cursor-pointer active:scale-95"
+                                >
+                                  <HelpCircle className="w-2.5 h-2.5 shrink-0 text-indigo-500" />
+                                  <span className="truncate max-w-[240px]">{q}</span>
+                                </button>
+                              ))}
                             </div>
-                          </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    {/* FLOATING SUGGESTIONS CHIPS */}
-                    <div className="flex items-center space-x-1.5 mb-2 overflow-x-auto py-1 scroll-smooth">
-                      <button
-                        type="button"
-                        onClick={() => handleSendLiveChat("Explícame resumidamente el último tema expuesto con ejemplos sencillos.")}
-                        className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
-                      >
-                        💡 Explicar último concepto
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSendLiveChat("¿Cuáles son las ideas clave o tareas importantes que se han mencionado explícitamente?")}
-                        className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
-                      >
-                        📝 Tareas mencionadas
-                      </button>
-                    </div>
+                        {/* CHAT MESSAGES PANEL */}
+                        <div 
+                          ref={chatScrollRef}
+                          className="flex-1 overflow-y-auto space-y-3 pr-1 py-1 mb-4 border-b border-slate-200/50 flex flex-col justify-start"
+                          style={{ height: "440px", maxHeight: "440px" }}
+                        >
+                          {chatMessages.map((msg, i) => (
+                            <div
+                              key={i}
+                              className={`flex items-start gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+                            >
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 select-none ${
+                                msg.role === "user" ? "bg-slate-200 text-slate-700" : "bg-indigo-600/10 border border-indigo-100 text-indigo-700"
+                              }`}>
+                                {msg.role === "user" ? "👤" : "🤖"}
+                              </div>
+                              
+                              <div className={`p-3 rounded-2xl max-w-[85%] text-xs shadow-3xs transition-shadow ${
+                                msg.role === "user" 
+                                  ? "bg-indigo-600 text-white rounded-tr-none text-right font-medium" 
+                                  : "bg-white border border-slate-200/70 text-slate-800 rounded-tl-none text-left"
+                              }`}>
+                                <div className="whitespace-pre-wrap font-sans text-[11.5px] leading-relaxed">
+                                  {msg.content}
+                                </div>
+                                
+                                {msg.timestamp && (
+                                  <span className={`block text-[8px] mt-1 select-none font-medium ${msg.role === "user" ? "text-indigo-200" : "text-slate-400"}`}>
+                                    {msg.timestamp}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
 
-                    {/* CHAT INPUT AREA */}
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        handleSendLiveChat(chatInput);
-                      }}
-                      className="flex items-stretch gap-2"
-                    >
-                      <input
-                        type="text"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        placeholder="Pregúntale al copiloto sobre la clase en vivo..."
-                        disabled={isChatSending}
-                        className="flex-grow bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#135bf1] transition-all disabled:opacity-50"
-                      />
-                      <button
-                        type="submit"
-                        disabled={isChatSending || !chatInput.trim()}
-                        className="px-3 py-2 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 cursor-pointer"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                      </button>
-                    </form>
+                          {isChatSending && (
+                            <div className="flex items-start gap-2.5">
+                              <div className="w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center font-bold text-[10px] shrink-0 select-none">
+                                🤖
+                              </div>
+                              <div className="bg-white border border-slate-200/70 p-3 rounded-2xl rounded-tl-none shadow-3xs">
+                                <div className="flex items-center space-x-1.5">
+                                  <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                  <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                                  <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                                  <span className="text-[10px] text-slate-400 font-bold ml-1">Buscando en la transcripción en vivo...</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* FLOATING SUGGESTIONS CHIPS */}
+                        <div className="flex items-center space-x-1.5 mb-2 overflow-x-auto py-1 scroll-smooth">
+                          <button
+                            type="button"
+                            onClick={() => handleSendLiveChat("Explícame resumidamente el último tema expuesto con ejemplos sencillos.")}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
+                          >
+                            💡 Explicar último concepto
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSendLiveChat("¿Cuáles son las ideas clave o tareas importantes que se han mencionado explícitamente?")}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
+                          >
+                            📝 Tareas mencionadas
+                          </button>
+                        </div>
+
+                        {/* CHAT INPUT AREA */}
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleSendLiveChat(chatInput);
+                          }}
+                          className="flex items-stretch gap-2"
+                        >
+                          <input
+                            type="text"
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            placeholder="Pregúntale al copiloto sobre la clase en vivo..."
+                            disabled={isChatSending}
+                            className="flex-grow bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#135bf1] transition-all disabled:opacity-50"
+                          />
+                          <button
+                            type="submit"
+                            disabled={isChatSending || !chatInput.trim()}
+                            className="px-3 py-2 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 cursor-pointer"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                          </button>
+                        </form>
+                      </>
+                    )}
 
                   </div>
 

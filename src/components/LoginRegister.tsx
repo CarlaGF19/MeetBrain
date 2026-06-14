@@ -22,6 +22,49 @@ import {
   Cpu
 } from "lucide-react";
 
+interface TiltCardProps {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+function TiltCard({ children, className, style }: TiltCardProps) {
+  const [tiltStyle, setTiltStyle] = useState<React.CSSProperties>({});
+  
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const card = e.currentTarget;
+    const box = card.getBoundingClientRect();
+    const x = e.clientX - box.left - box.width / 2;
+    const y = e.clientY - box.top - box.height / 2;
+    
+    const tiltX = -(y / (box.height / 2)) * 8;
+    const tiltY = (x / (box.width / 2)) * 8;
+    
+    setTiltStyle({
+      transform: `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale3d(1.03, 1.03, 1.03)`,
+      transition: "transform 0.1s ease-out",
+    });
+  };
+  
+  const handleMouseLeave = () => {
+    setTiltStyle({
+      transform: `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`,
+      transition: "transform 0.4s ease-out",
+    });
+  };
+
+  return (
+    <div
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ ...style, ...tiltStyle }}
+      className={className}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface LoginRegisterProps {
   onLoginSuccess: (user: User) => void;
 }
@@ -64,7 +107,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
   };
 
   return (
-    <div id="login_screen_wrapper" className="min-h-screen w-full bg-gradient-to-tr from-[#020617] via-[#0b1329] to-[#040815] flex items-stretch justify-center select-none font-sans relative overflow-hidden p-4 sm:p-8">
+    <div id="login_screen_wrapper" className="h-screen w-screen bg-gradient-to-tr from-[#020617] via-[#0b1329] to-[#040815] flex items-center justify-center select-none font-sans relative overflow-hidden p-4">
       
       {/* Dynamic Glowing Ambient Light Orbs for Glassmorphism Background depth */}
       <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-gradient-to-tr from-[#004ac6]/20 to-[#2563eb]/5 filter blur-[120px] pointer-events-none animate-[pulse_8s_infinite_alternate]" />
@@ -77,11 +120,11 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full max-w-7xl mx-auto bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10 shadow-[0_24px_80px_rgba(0,0,0,0.4)] my-auto self-center"
+        className="w-full max-w-7xl max-h-[92vh] mx-auto bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10 shadow-[0_24px_80px_rgba(0,0,0,0.4)] my-auto self-center"
       >
         
         {/* LEFT COLUMN (7 Cols) - Olli Value Prop & Glassmorphic Tiles */}
-        <div className="lg:col-span-7 p-8 sm:p-14 lg:p-16 flex flex-col justify-between relative overflow-y-auto">
+        <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-between relative overflow-y-auto max-h-[92vh]">
           
           {/* Header Brand */}
           <div className="flex items-center gap-2.5 text-left mb-10 lg:mb-0">
@@ -116,51 +159,51 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
             </p>
 
             {/* Feature Bento Grid with Glassmorphic blocks */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-5">
               
               {/* Feature 1: Live Record */}
-              <div className="p-5 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3">
+              <TiltCard className="p-4 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-2.5">
                   <Mic className="w-5 h-5" />
                 </div>
                 <h3 className="font-display text-sm font-semibold text-white">Captura Precisa</h3>
-                <p className="font-sans text-[12px] text-slate-400 mt-1 leading-normal">
+                <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">
                   Transcripción en tiempo real impulsada por IA, sin perder un solo detalle crítico.
                 </p>
-              </div>
+              </TiltCard>
 
               {/* Feature 2: Structured Document */}
-              <div className="p-5 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-3">
+              <TiltCard className="p-4 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-2.5">
                   <FileText className="w-5 h-5" />
                 </div>
                 <h3 className="font-display text-sm font-semibold text-white">Síntesis Automática</h3>
-                <p className="font-sans text-[12px] text-slate-400 mt-1 leading-normal">
+                <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">
                   Generación instantánea de resúmenes estructurados y tareas asignables.
                 </p>
-              </div>
+              </TiltCard>
 
               {/* Feature 3: Copilot */}
-              <div className="p-5 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#fea619] mb-3">
+              <TiltCard className="p-4 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#fea619] mb-2.5">
                   <Bot className="w-5 h-5" />
                 </div>
                 <h3 className="font-display text-sm font-semibold text-white">IA Conversacional</h3>
-                <p className="font-sans text-[12px] text-slate-400 mt-1 leading-normal">
+                <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">
                   Interactúa con tus transcripciones para extraer insights ocultos al instante.
                 </p>
-              </div>
+              </TiltCard>
 
               {/* Feature 4: High Reliability Protection */}
-              <div className="p-5 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3">
+              <TiltCard className="p-4 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-2.5">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <h3 className="font-display text-sm font-semibold text-white">Seguridad Total</h3>
-                <p className="font-sans text-[12px] text-slate-400 mt-1 leading-normal">
+                <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">
                   Infraestructura blindada para mantener la confidencialidad absoluta de tus datos.
                 </p>
-              </div>
+              </TiltCard>
 
             </div>
           </div>
@@ -177,7 +220,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
           <div className="my-auto max-w-sm mx-auto w-full">
             
             {/* Glowing Blue-Cyan Neon Glassmorphism Card */}
-            <div className="bg-gradient-to-b from-[#004ac6]/90 via-[#0053db]/95 to-[#00a8e8]/90 backdrop-blur-2xl rounded-3xl border border-white/25 p-8 shadow-[0_20px_50px_rgba(0,168,232,0.25)] text-center relative overflow-hidden">
+            <TiltCard className="bg-gradient-to-b from-[#004ac6]/90 via-[#0053db]/95 to-[#00a8e8]/90 backdrop-blur-2xl rounded-3xl border border-white/25 p-7 shadow-[0_20px_50px_rgba(0,168,232,0.25)] text-center relative overflow-hidden">
               
               {/* Highlight Overlay effect */}
               <div className="absolute inset-0 bg-linear-to-tr from-white/0 via-white/5 to-white/15 pointer-events-none" />
@@ -203,7 +246,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                   disabled={isLoading}
                   whileHover={{ scale: 1.02, y: -1 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full bg-[#ffffff] hover:bg-slate-50 text-slate-900 font-semibold py-3 px-5 rounded-xl shadow-[0_8px_20px_rgba(0,0,0,0.15)] flex items-center justify-center gap-3.5 transition-all text-sm cursor-pointer select-none disabled:opacity-75 h-12"
+                  className="w-full bg-[#ffffff] hover:bg-slate-55 text-slate-900 font-semibold py-3 px-5 rounded-xl shadow-[0_8px_20px_rgba(0,0,0,0.15)] flex items-center justify-center gap-3.5 transition-all text-sm cursor-pointer select-none disabled:opacity-75 h-12"
                 >
                   {isLoading ? (
                     <span className="border-2 border-slate-900/20 border-t-slate-900 rounded-full w-5 h-5 animate-spin" />
@@ -234,7 +277,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                       exit={{ opacity: 0 }}
                       className="bg-black/25 border border-white/10 rounded-xl p-3 text-[11px] font-medium text-white flex items-start space-x-2 text-left w-full shadow-inner"
                     >
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <AlertCircle className="w-4 h-4 text-rose-455 shrink-0 mt-0.5" />
                       <span>{error}</span>
                     </motion.div>
                   )}
@@ -263,7 +306,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                 </AnimatePresence>
               </div>
 
-            </div>
+            </TiltCard>
 
           </div>
 
