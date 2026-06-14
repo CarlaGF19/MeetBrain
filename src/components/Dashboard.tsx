@@ -8,8 +8,6 @@ import { Meeting } from "../types";
 import { formatInUTC5 } from "../lib/dateUtils";
 import {
   Search,
-  Video,
-  Upload,
   Mic,
   ChevronDown,
   Clock,
@@ -60,33 +58,8 @@ export default function Dashboard({
           <h1 className="text-xl font-bold text-[#111111] tracking-tight">Dashboard</h1>
           <p className="text-[11px] text-slate-400 mt-0.5">Administra tus notas, reuniones y resúmenes de clase.</p>
         </div>
-
-        {/* Action controls in right-hand side */}
+        {/* Action controls in right-hand side */}
         <div className="flex items-center gap-3">
-          {/* Virtual Quick Video Meet Link */}
-          <button
-            onClick={() => {
-              if (setRecorderMode) setRecorderMode("record");
-              setActiveTab("recorder");
-            }}
-            className="p-2 bg-transparent hover:bg-[#F4F4F5] border border-[#E9E9EB] rounded-full text-slate-700 transition-all cursor-pointer shadow-2xs flex items-center justify-center"
-            title="Start video/screen capture"
-          >
-            <Video className="w-5 h-5 text-slate-750" />
-          </button>
-
-          {/* Import / Upload Audio */}
-          <button
-            onClick={() => {
-              if (setRecorderMode) setRecorderMode("upload");
-              setActiveTab("recorder");
-            }}
-            className="p-2 bg-transparent hover:bg-[#F4F4F5] border border-[#E9E9EB] rounded-full text-slate-700 transition-all cursor-pointer shadow-2xs flex items-center justify-center"
-            title="Import raw transcript / file"
-          >
-            <Upload className="w-5 h-5 text-slate-755" />
-          </button>
-
           {/* Glowing Red/Blue Mic record trigger */}
           <button
             onClick={() => {

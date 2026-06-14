@@ -430,12 +430,15 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
             }
           }
           
-          // Stop video tracks immediately to prevent black screen / high CPU bugs since we only need the audio
+          // Mute video tracks (enabled = false) instead of stopping them immediately.
+          // Stopping video tracks immediately at start can crash the browser's media host process 
+          // (causing the tab to go black). Disabling them keeps the pipeline active but stops rendering 
+          // video frames, saving CPU/GPU without causing crashes.
           displayStream.getVideoTracks().forEach((track) => {
             try {
-              track.stop();
+              track.enabled = false;
             } catch (e) {
-              console.warn("Failed to stop video track:", e);
+              console.warn("Failed to disable video track:", e);
             }
           });
 
