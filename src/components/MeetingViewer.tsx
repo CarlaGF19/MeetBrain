@@ -66,7 +66,7 @@ export default function MeetingViewer({
 }: MeetingViewerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"summary" | "transcript">("summary");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopiado] = useState(false);
   const [filterFavorites, setFilterFavorites] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
@@ -98,15 +98,30 @@ export default function MeetingViewer({
   const [conversations, setConversations] = useState<Record<string, ChatMessage[]>>({});
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  const getFriendlyAIError = (message: string) => {
+    const raw = message || "";
+    const lower = raw.toLowerCase();
+
+    if (raw.includes("429") || lower.includes("quota") || lower.includes("resource_exhausted")) {
+      return "Gemini alcanzó el límite de cuota de tu API key. Espera a que se renueve o conecta otra clave.";
+    }
+
+    if (raw.includes("401") || raw.includes("403") || lower.includes("api key") || lower.includes("permission")) {
+      return "Conecta una API key válida en Settings para activar respuestas inteligentes.";
+    }
+
+    return raw.length > 180 ? `${raw.slice(0, 180)}...` : raw;
+  };
+
   // Initialize and load chat history for selected meeting
   useEffect(() => {
     if (selectedMeeting && !conversations[selectedMeeting.id]) {
       // Set initial welcoming message from Olli
       const welcomeMsg: ChatMessage = {
         role: "model",
-        content: `¡Hola! Soy **Olli**, tu asistente inteligente. He analizado la sesión **"${selectedMeeting.title}"** en tiempo real. 
+        content: `Hola. Soy **Olli**, tu asistente inteligente. Ya tengo cargada la sesi?n **"${selectedMeeting.title}"** en tiempo real. 
 
-¿De qué te gustaría hablar hoy? Puedo ayudarte a extraer decisiones tomadas, planes de acción, tareas asignadas o resumir algún tema en particular de esta transcripción.`,
+Puedes pedirme decisiones, tareas, resumen ejecutivo o preguntas sobre la transcripci?n.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setConversations(prev => ({
@@ -165,7 +180,7 @@ export default function MeetingViewer({
 
       setActiveTab("summary");
     } catch (err: any) {
-      console.error("Text Summary Error:", err);
+      console.error("Text Resumen Error:", err);
       setSummarizationError(err.message || "Fallo inesperado al resumir el borrador de texto.");
     } finally {
       setIsSummarizing(false);
@@ -186,8 +201,8 @@ export default function MeetingViewer({
 
   const handleCopyClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
   };
 
   const startEditTitle = (meeting: Meeting) => {
@@ -220,10 +235,10 @@ export default function MeetingViewer({
 Fecha: ${formatInUTC5(meeting.date, "datetime")} (UTC-5)
 Duration: ${meeting.duration}
 
-## AI Summary & Actions
+## AI Resumen & Actions
 ${meeting.summary}
 
-## Verbatim Transcript
+## Verbatim Transcripci?n
 ${meeting.transcript}
 `;
     const cleanName = meeting.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -401,7 +416,7 @@ ${meeting.transcript}
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: recipientEmail,
-          subject: emailSubject || `Acta de Reunión: ${selectedMeeting.title}`,
+          subject: emailSubject || `Acta de reuni?n: ${selectedMeeting.title}`,
           body: emailNote,
           pdfBase64: pdfBase64DataUri,
           pdfFilename,
@@ -506,7 +521,7 @@ ${meeting.transcript}
 
   // Custom parser rendering Markdown to HTML neatly
   const renderMarkdown = (markdownText: string) => {
-    if (!markdownText) return <p className="text-slate-450 italic">No notes data present.</p>;
+    if (!markdownText) return <p className="text-slate-450 italic">No hay contenido disponible.</p>;
     
     const lines = markdownText.split("\n");
     return lines.map((line, idx) => {
@@ -601,16 +616,16 @@ ${meeting.transcript}
   };
 
   return (
-    <div className="flex h-[calc(100vh-140px)] gap-6 select-none font-sans relative">
+    <div className="flex h-[calc(100vh-112px)] gap-4 select-none font-sans relative overflow-hidden">
       
       {/* 1. Left Vault Explorer List */}
-      <div id="vault_explorer" className="w-[280px] bg-slate-50/20 border border-[#E9E9EB] rounded-3xl flex flex-col overflow-hidden shrink-0 max-lg:hidden">
+      <div id="vault_explorer" className="w-[300px] bg-white border border-[#E9E9EB] rounded-2xl flex flex-col overflow-hidden shrink-0 max-lg:hidden shadow-sm">
         
         {/* Explorer header info */}
         <div className="p-4 border-b border-[#E9E9EB] bg-white/40 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-[#111111] tracking-tight uppercase">
-              Bóveda Local
+              Biblioteca local
             </span>
             <button
               onClick={() => setFilterFavorites(!filterFavorites)}
@@ -630,7 +645,7 @@ ${meeting.transcript}
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder="Buscar conversaciones..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-[#F4F4F5] pl-9 pr-3 py-1.5 border border-transparent focus:bg-white text-xs rounded-xl outline-none transition-all focus:border-[#EBEBEB]"
@@ -645,7 +660,7 @@ ${meeting.transcript}
               <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mb-3 shadow-inner">
                 <FolderOpen className="w-6 h-6 text-slate-400" />
               </div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Bóveda Vacía</p>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Biblioteca vacia</p>
               <p className="text-[10px] text-slate-400 mt-1 leading-normal max-w-[160px] mx-auto text-center">No se encontraron apuntes o actas guardadas</p>
             </div>
           ) : (
@@ -700,7 +715,7 @@ ${meeting.transcript}
       </div>
 
       {/* 2. Interactive Double Pane (Main Workspace & Ask Olli AI Column) */}
-      <div id="notes_workspace" className="flex-grow bg-white border border-[#E9E9EB] rounded-3xl flex flex-row overflow-hidden shadow-sm">
+      <div id="notes_workspace" className="flex-grow min-w-0 bg-white border border-[#E9E9EB] rounded-2xl flex flex-row overflow-hidden shadow-sm">
         {selectedMeeting ? (
           <div className="flex w-full h-full">
             
@@ -708,7 +723,7 @@ ${meeting.transcript}
             <div className="flex-grow flex flex-col h-full min-w-0 border-r border-[#E9E9EB] relative">
               
               {/* Doc Workspace header controls */}
-              <div className="p-5 border-b border-[#E9E9EB] bg-slate-50/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="p-6 border-b border-[#E9E9EB] bg-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex-grow min-w-0">
                   {isEditingTitle ? (
                     <div className="flex items-center space-x-2">
@@ -734,7 +749,7 @@ ${meeting.transcript}
                   ) : (
                     <h1
                       onClick={() => startEditTitle(selectedMeeting)}
-                      className="text-base font-black text-[#111111] tracking-tight leading-snug cursor-pointer group hover:text-[#135bf1] flex items-center shrink-0"
+                      className="text-2xl font-black text-[#111111] tracking-tight leading-snug cursor-pointer group hover:text-[#135bf1] flex items-center shrink-0"
                       title="Click to rename"
                     >
                       <span className="truncate">{selectedMeeting.title}</span>
@@ -744,7 +759,7 @@ ${meeting.transcript}
                     </h1>
                   )}
                   
-                  <div className="flex items-center space-x-4 text-[10px] text-slate-400 mt-2 font-semibold">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-3 font-semibold">
                     <span className="flex items-center">
                       <Calendar className="w-3.5 h-3.5 mr-1" />
                       {formatInUTC5(selectedMeeting.date, "datetime")} (UTC-5)
@@ -784,20 +799,20 @@ ${meeting.transcript}
                     <FileText className="w-3.5 h-3.5 text-emerald-500" />
                   </button>
                   
-                  {/* Share pill selector button */}
+                  {/* Compartir pill selector button */}
                   <button
                     onClick={() => {
                       setIsEmailModalOpen(true);
-                      setEmailSubject(`Acta de Reunión: ${selectedMeeting.title}`);
+                      setEmailSubject(`Acta de reunion: ${selectedMeeting.title}`);
                       setEmailSuccess(null);
                       setEmailError("");
                       setTestMessageBoxUrl(null);
                     }}
                     className="px-3.5 py-1.5 rounded-full bg-[#135bf1] hover:bg-[#0746cc] text-white flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer transition-all active:scale-95"
-                    title="Share meeting note via E-mail"
+                    title="Compartir meeting note via E-mail"
                   >
                     <Mail className="w-3.5 h-3.5" />
-                    <span>Share</span>
+                    <span>Compartir</span>
                   </button>
                   
                   <button
@@ -812,14 +827,14 @@ ${meeting.transcript}
 
               {/* 💡 DRAFT AI SUMMARY TRIGGER BANNER */}
               {selectedMeeting.isDraft && (
-                <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200/60 rounded-xl text-left flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="mx-6 mt-5 p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-2xl text-left flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
                   <div className="flex-1">
-                    <h3 className="text-xs font-bold text-amber-900 flex items-center gap-1.5 uppercase tracking-wide">
-                      <Sparkles className="w-4 h-4 text-amber-650 animate-pulse shrink-5" />
-                      Borrador Guardado en Tiempo Real (Protección de Sesión)
+                    <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 tracking-tight">
+                      <Sparkles className="w-5 h-5 text-[#135bf1] shrink-0" />
+                      Borrador guardado en tiempo real
                     </h3>
-                    <p className="text-[11px] text-amber-800 leading-relaxed mt-1">
-                      Esta conversación se guardó automáticamente en vivo para proteger tus apuntes de cortes de internet o límites de servidor. ¿Quieres usar nuestro motor de IA ultrarrápido para redactar un resumen ejecutivo y plan de acción estructurado?
+                    <p className="text-sm text-slate-650 leading-7 mt-2 max-w-2xl">
+                      Esta conversacion se guardo automaticamente mientras hablabas. Puedes generar un resumen ejecutivo, revisar la transcripcion o crear un plan de accion.
                     </p>
                     {summarizationError && (
                       <p className="text-[11px] text-rose-600 font-semibold mt-2 bg-rose-50 p-2 rounded-lg border border-rose-100">
@@ -832,43 +847,43 @@ ${meeting.transcript}
                       type="button"
                       onClick={() => handleSummarizeDraftText(selectedMeeting)}
                       disabled={isSummarizing || !selectedMeeting.transcript}
-                      className="inline-flex items-center justify-center space-x-1.5 px-3.5 py-2 w-full md:w-auto bg-gradient-to-tr from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-550 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-amber-600/15 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center justify-center space-x-1.5 px-4 py-2.5 w-full md:w-auto bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/15 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSummarizing ? (
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <Sparkles className="w-3.5 h-3.5" />
                       )}
-                      <span>{isSummarizing ? "Generando..." : "Resumir Borrador con IA"}</span>
+                      <span>{isSummarizing ? "Generando..." : "Resumir con IA"}</span>
                     </button>
                   </div>
                 </div>
               )}
 
               {/* Document body navigation selector */}
-              <div className="px-6 border-b border-[#F2F2F2] flex items-center justify-between bg-slate-50/10">
-                <div className="flex space-x-1.5 py-1.5">
+              <div className="px-6 py-3 border-b border-[#F2F2F2] flex items-center justify-between bg-white">
+                <div className="flex space-x-1.5 p-1 bg-slate-100 rounded-xl">
                   <button
                     onClick={() => setActiveTab("summary")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
                       activeTab === "summary"
-                        ? "bg-[#135bf1]/5 text-[#135bf1]"
+                        ? "bg-white text-[#135bf1] shadow-sm"
                         : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
                     }`}
                   >
                     <BookOpen className="w-3.5 h-3.5" />
-                    <span>Summary</span>
+                    <span>Resumen</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("transcript")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
                       activeTab === "transcript"
-                        ? "bg-[#135bf1]/5 text-[#135bf1]"
+                        ? "bg-white text-[#135bf1] shadow-sm"
                         : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
                     }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
-                    <span>Transcript</span>
+                    <span>Transcripción</span>
                   </button>
                 </div>
 
@@ -883,7 +898,7 @@ ${meeting.transcript}
                     className="px-2.5 py-1.5 bg-slate-55 hover:bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 flex items-center space-x-1.5 transition-colors cursor-pointer border border-[#E9E9EB]"
                   >
                     {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    <span>{copied ? "Copied" : "Copy"}</span>
+                    <span>{copied ? "Copiado" : "Copiar"}</span>
                   </button>
                   <button
                     onClick={() => setIsChatPanelOpen(!isChatPanelOpen)}
@@ -894,13 +909,13 @@ ${meeting.transcript}
                     }`}
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
-                    <span>{isChatPanelOpen ? "Close Assistant" : "Olli AI Chat"}</span>
+                    <span>{isChatPanelOpen ? "Cerrar asistente" : "Abrir asistente"}</span>
                   </button>
                 </div>
               </div>
 
               {/* Display notes area */}
-              <div className="flex-grow overflow-y-auto p-6 bg-slate-50/5 relative">
+              <div className="flex-grow overflow-y-auto p-6 bg-slate-50/40 relative">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeTab}
@@ -908,14 +923,14 @@ ${meeting.transcript}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.12 }}
-                    className="bg-white border border-[#E9E9EB]/50 rounded-2xl p-5 shadow-2xs text-left"
+                    className="bg-white border border-[#E9E9EB]/80 rounded-2xl p-6 shadow-2xs text-left"
                   >
                     {activeTab === "summary" ? (
                       <div id="markdown_body" className="space-y-2 leading-relaxed font-sans">
                         {renderMarkdown(selectedMeeting.summary)}
                       </div>
                     ) : (
-                      <div className="font-sans text-slate-700 leading-relaxed text-sm whitespace-pre-wrap font-medium space-y-3">
+                      <div className="font-sans text-slate-700 leading-7 text-[14px] whitespace-pre-wrap font-medium space-y-3 text-justify [text-wrap:pretty]">
                         {selectedMeeting.transcript ? (
                           selectedMeeting.transcript.split("\n").map((line, idx) => {
                             const match = line.match(/^\[(\d{2}:\d{2})\]\s*(.*?):\s*(.*)/);
@@ -947,7 +962,7 @@ ${meeting.transcript}
                           })
                         ) : (
                           <p className="font-sans italic text-slate-400 text-xs text-center py-8">
-                            No transcript content returned.
+                            No hay transcripci?n disponible.
                           </p>
                         )}
                       </div>
@@ -960,16 +975,16 @@ ${meeting.transcript}
 
             </div>
 
-            {/* Right Pane - Otter Olli AI Assistant Interactive Chat column */}
+            {/* Right Pane - Otter Olli AI Interactive Chat column */}
             <AnimatePresence>
               {isChatPanelOpen && (
                 <motion.div
                   id="olli_assistant_column"
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 360, opacity: 1 }}
+                  animate={{ width: 340, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{ type: "tween", duration: 0.2 }}
-                  className="bg-[#FAF9F6] flex flex-col h-full shrink-0 border-l border-[#EBEBEB] overflow-hidden"
+                  className="bg-white flex flex-col h-full shrink-0 border-l border-[#EBEBEB] overflow-hidden"
                 >
                   {/* Olli Header */}
                   <div className="p-4 border-b border-[#E9E9EB] flex items-center justify-between bg-white">
@@ -977,7 +992,7 @@ ${meeting.transcript}
                       <div className="w-6.5 h-6.5 rounded-full bg-[#135bf1]/10 flex items-center justify-center">
                         <Sparkles className="w-3.5 h-3.5 text-[#135bf1]" />
                       </div>
-                      <span className="text-xs font-bold text-[#111111] tracking-tight">Olli AI Assistant</span>
+                      <span className="text-sm font-bold text-[#111111] tracking-tight">Olli AI</span>
                     </div>
 
                     <button 
@@ -990,30 +1005,30 @@ ${meeting.transcript}
                   </div>
 
                   {/* AI Column tab switchers */}
-                  <div className="px-3 bg-white border-b border-[#E9E9EB] flex">
+                  <div className="px-4 py-2 bg-white border-b border-[#E9E9EB] flex gap-1">
                     <button 
                       onClick={() => setChatTab("chat")}
-                      className={`text-[11px] font-bold py-2.5 px-3 border-b-2 transition-all ${
-                        chatTab === "chat" ? "border-[#135bf1] text-[#135bf1]" : "border-transparent text-slate-500 hover:text-slate-800"
+                      className={`text-[11px] font-bold py-2 px-3 rounded-lg transition-all ${
+                        chatTab === "chat" ? "bg-[#135bf1] text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                       }`}
                     >
                       Chat
                     </button>
                     <button 
                       onClick={() => setChatTab("outline")}
-                      className={`text-[11px] font-bold py-2.5 px-3 border-b-2 transition-all ${
-                        chatTab === "outline" ? "border-[#135bf1] text-[#135bf1]" : "border-transparent text-slate-500 hover:text-slate-800"
+                      className={`text-[11px] font-bold py-2 px-3 rounded-lg transition-all ${
+                        chatTab === "outline" ? "bg-[#135bf1] text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                       }`}
                     >
-                      Outline
+                      Guia
                     </button>
                     <button 
                       onClick={() => setChatTab("comments")}
-                      className={`text-[11px] font-bold py-2.5 px-3 border-b-2 transition-all ${
-                        chatTab === "comments" ? "border-[#135bf1] text-[#135bf1]" : "border-transparent text-slate-500 hover:text-slate-800"
+                      className={`text-[11px] font-bold py-2 px-3 rounded-lg transition-all ${
+                        chatTab === "comments" ? "bg-[#135bf1] text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                       }`}
                     >
-                      Comments
+                      Notas
                     </button>
                   </div>
 
@@ -1022,7 +1037,7 @@ ${meeting.transcript}
                     <div className="flex-grow flex flex-col overflow-hidden min-h-0">
                       
                       {/* Active messages scroll panel */}
-                      <div className="flex-grow overflow-y-auto p-4 space-y-3.5 divide-y divide-slate-100/10">
+                      <div className="flex-grow overflow-y-auto p-4 space-y-4">
                         {conversations[selectedMeeting.id]?.map((msg, idx) => {
                           const isAI = msg.role === "model";
                           return (
@@ -1033,10 +1048,10 @@ ${meeting.transcript}
                                   ? "bg-[#135bf1]/8 border-[#135bf1]/15 text-[#135bf1]" 
                                   : "bg-[#F5F2EB] border-[#E2E0D8] text-slate-700"
                               }`}>
-                                {isAI ? "🤖" : "ME"}
+                                {isAI ? "AI" : "Tu"}
                               </div>
                               
-                              <div className="text-left w-full max-w-[80%]">
+                              <div className="text-left w-full max-w-[86%]">
                                 <div className={`px-3 py-2.5 rounded-2xl text-[11px] leading-relaxed shadow-3xs ${
                                   isAI 
                                     ? "bg-white border border-[#E9E9EB] text-slate-750" 
@@ -1058,20 +1073,20 @@ ${meeting.transcript}
                         {isGeneratingChat && (
                           <div className="flex items-start gap-2.5 pt-2">
                             <div className="w-7 h-7 rounded-full bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center text-[9px] shrink-0">
-                              🤖
+                            AI
                             </div>
                             <div className="bg-white border border-[#E9E9EB] px-4 py-3 rounded-2xl flex items-center gap-2">
                               <span className="w-1.5 h-1.5 bg-[#135bf1] rounded-full animate-bounce" />
                               <span className="w-1.5 h-1.5 bg-[#135bf1] rounded-full animate-bounce [animation-delay:0.2s]" />
                               <span className="w-1.5 h-1.5 bg-[#135bf1] rounded-full animate-bounce [animation-delay:0.4s]" />
-                              <span className="text-[10px] text-slate-455 ml-1">Olli está analizando...</span>
+                              <span className="text-[10px] text-slate-455 ml-1">Olli esta analizando...</span>
                             </div>
                           </div>
                         )}
 
                         {chatError && (
-                          <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-xl text-[10px] text-rose-700 text-left">
-                            ⚠️ Fallo al obtener respuesta: {chatError}
+                          <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-[11px] text-rose-700 text-left leading-relaxed">
+                            {getFriendlyAIError(chatError)}
                           </div>
                         )}
 
@@ -1079,30 +1094,30 @@ ${meeting.transcript}
                       </div>
 
                       {/* Prompt suggestion quick pills as shown in Otter screenshot */}
-                      <div className="px-4 py-2 border-t border-[#E9E9EB]/60 bg-[#FAF9F6] space-y-1.5 text-left">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Temas rápidos para Olli:</p>
+                      <div className="px-4 py-3 border-t border-[#E9E9EB]/60 bg-slate-50 space-y-2 text-left">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Acciones rapidas</p>
                         
-                        <div className="flex flex-wrap gap-1.5 select-none">
+                        <div className="grid grid-cols-1 gap-2 select-none">
                           <button
                             onClick={() => handleQueryOlliChat("¿Cuáles son las decisiones tomadas en esta reunión?")}
                             disabled={isGeneratingChat}
-                            className="text-[9px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-2 py-1 rounded-full transition-colors cursor-pointer text-left"
+                            className="text-[11px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-3 py-2 rounded-xl transition-colors cursor-pointer text-left"
                           >
-                            💡 ¿Qué decisiones se tomaron?
+                        Decisiones tomadas
                           </button>
                           <button
                             onClick={() => handleQueryOlliChat("Escribe un plan de acción con tareas y responsables.")}
                             disabled={isGeneratingChat}
-                            className="text-[9px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-2 py-1 rounded-full transition-colors cursor-pointer text-left"
+                            className="text-[11px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-3 py-2 rounded-xl transition-colors cursor-pointer text-left"
                           >
-                            📋 Crear Plan de Acción (To-dos)
+                            Crear plan de accion
                           </button>
                           <button
                             onClick={() => handleQueryOlliChat("Hazme un resumen ejecutivo de 3 viñetas breves.")}
                             disabled={isGeneratingChat}
-                            className="text-[9px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-2 py-1 rounded-full transition-colors cursor-pointer text-left"
+                            className="text-[11px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-3 py-2 rounded-xl transition-colors cursor-pointer text-left"
                           >
-                            ⚡ Resumen de 3 viñetas
+                            Resumen de 3 vinetas
                           </button>
                         </div>
                       </div>
@@ -1122,7 +1137,7 @@ ${meeting.transcript}
                             type="text"
                             value={userChatMessage}
                             onChange={(e) => setUserChatMessage(e.target.value)}
-                            placeholder="Ask anything about your conversations..."
+                            placeholder="Pregunta sobre esta conversaci?n..."
                             disabled={isGeneratingChat}
                             className="w-full bg-[#F4F4F5] pl-3.5 pr-10 py-2 text-xs rounded-xl focus:bg-white outline-none border border-transparent focus:border-[#EBEBEB] text-[#111111] placeholder-slate-450"
                           />
@@ -1139,7 +1154,7 @@ ${meeting.transcript}
                     </div>
                   ) : chatTab === "outline" ? (
                     <div className="flex-grow p-4 overflow-y-auto text-left space-y-4">
-                      <p className="text-xs font-bold text-[#111111]">Capítulo & Estructura de Minuta:</p>
+                      <p className="text-xs font-bold text-[#111111]">Gu?a de la reuni?n</p>
                       <div className="space-y-2.5">
                         {selectedMeeting.summary.split("\n").filter(l => l.startsWith("##") || l.startsWith("###")).map((sectionHeader, sIdx) => {
                           const cleanSection = sectionHeader.replace(/^#+\s*/, "");
@@ -1157,13 +1172,13 @@ ${meeting.transcript}
                           );
                         })}
                         {selectedMeeting.summary.split("\n").filter(l => l.startsWith("##") || l.startsWith("###")).length === 0 && (
-                          <p className="text-[11px] text-slate-400 italic">No se encontraron títulos estructurados en el resumen.</p>
+                          <p className="text-[11px] text-slate-400 italic">No se encontraron t?tulos estructurados en el resumen.</p>
                         )}
                       </div>
                     </div>
                   ) : (
                     <div className="flex-grow p-4 text-left space-y-4">
-                      <p className="text-xs font-bold text-[#111111]">Team Comments or Notes:</p>
+                      <p className="text-xs font-bold text-[#111111]">Team Notas or Notes:</p>
                       <p className="text-[11px] text-slate-500">Agrega comentarios o anotaciones para consolidar el acta corporativa con tus compañeros.</p>
                       <div className="space-y-3">
                         <textarea 
@@ -1192,7 +1207,7 @@ ${meeting.transcript}
               No Conversation Active
             </h3>
             <p className="text-[10px] text-slate-400 max-w-xs mt-1.5 leading-relaxed">
-              Selecciona una sesión de audio o acta de la boveda a la izquierda, o inicia una nueva grabación dentro de Olli AI Chat.
+              Selecciona una sesión de audio o acta de la boveda a la izquierda, o inicia una nueva grabación dentro de Abrir asistente.
             </p>
           </div>
         )}
@@ -1282,7 +1297,7 @@ ${meeting.transcript}
                     type="text"
                     value={emailSubject}
                     onChange={(e) => setEmailSubject(e.target.value)}
-                    placeholder={`Acta de Reunión: ${selectedMeeting.title}`}
+                    placeholder={`Acta de reuni?n: ${selectedMeeting.title}`}
                     disabled={isSendingEmail}
                     className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#135bf1] focus:bg-white transition-all text-slate-800 placeholder-slate-450"
                   />

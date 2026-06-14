@@ -1230,8 +1230,27 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       .join(":");
   };
 
+  const getFriendlyErrorMessage = (message: string) => {
+    const raw = message || "";
+    const lower = raw.toLowerCase();
+
+    if (raw.includes("429") || lower.includes("quota") || lower.includes("resource_exhausted")) {
+      return "Gemini alcanzó el límite de cuota de tu API key. Espera a que se renueve la cuota o usa otra clave en Settings.";
+    }
+
+    if (raw.includes("401") || raw.includes("403") || lower.includes("api key") || lower.includes("permission")) {
+      return "La API key de Gemini no es válida o no tiene permisos. Revisa la clave guardada en Settings.";
+    }
+
+    if (lower.includes("payload") || raw.includes("413")) {
+      return "El audio es demasiado pesado para procesarlo de una sola vez. Intenta una grabación más corta.";
+    }
+
+    return raw.length > 220 ? `${raw.slice(0, 220)}...` : raw;
+  };
+
   return (
-    <div id="audio_recorder_box" className="bg-white border text-sans border-slate-100/80 rounded-3xl p-8 max-md:p-6 select-none relative overflow-hidden shadow-xl shadow-slate-200/40">
+    <div id="audio_recorder_box" className="bg-white border text-sans border-slate-100/80 rounded-3xl p-5 sm:p-6 select-none relative overflow-hidden shadow-xl shadow-slate-200/40 max-w-full">
       
       {/* Background Gradients */}
       <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#C4E2F5] blur-[80px] opacity-30 pointer-events-none"></div>
@@ -1291,13 +1310,13 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-xs font-medium text-rose-600 flex items-start space-x-3 text-left"
+            className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-xs font-medium text-rose-600 flex items-start space-x-3 text-left break-words"
           >
             <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
             <div className="flex-1">
               <div>
                 <span className="font-bold">Acoustic Guard: </span>
-                {errorMessage}
+                {getFriendlyErrorMessage(errorMessage)}
               </div>
               
               {errorMessage.includes("Firefox") || errorMessage.includes("Safari") || errorMessage.includes("Compartir audio") ? (
@@ -1504,7 +1523,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                           <div className="p-2 bg-emerald-50 rounded-xl text-emerald-650 shrink-0 text-sm">🎧</div>
                           <div>
                             <h5 className="text-xs font-bold text-slate-800">Acoustic Guard Activo</h5>
-                            <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">El sistema limpia los ruidos de fondo y ecos para brindarte la mejor precisión posible en la transcripción de voz.</p>
+                            <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">El sistema mejora la lectura del audio y mantiene la transcripción ordenada durante la clase.</p>
                           </div>
                         </div>
                       </div>
@@ -1527,10 +1546,10 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                 className="w-full"
               >
                 {/* Dual Pane Grid Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch w-full">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch w-full max-w-full overflow-hidden">
                   
                   {/* LEFT COLUMN: LIVE TRANSCRIPTION */}
-                  <div className="lg:col-span-8 flex flex-col items-stretch bg-slate-50/30 border border-slate-100 rounded-3xl p-5 relative">
+                  <div className="xl:col-span-8 min-w-0 flex flex-col items-stretch bg-slate-50/30 border border-slate-100 rounded-3xl p-4 relative">
                     
                     {/* Header Row */}
                     <div className="flex flex-wrap items-center justify-between w-full px-4 py-2 bg-white/80 backdrop-blur-md border border-slate-100 rounded-2xl mb-4 gap-2 shadow-3xs">
@@ -1571,7 +1590,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                       <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/55">
                         <div className="flex items-center space-x-1.5 text-[10px] font-bold text-rose-500 uppercase tracking-widest">
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse inline-block" />
-                          <span>Transcripción de Clase en Vivo</span>
+                          <span>Transcripción de clase en vivo</span>
                         </div>
                         <span className="text-[10px] bg-[#135bf1]/5 border border-[#135bf1]/10 px-2 py-0.5 rounded-md font-bold text-[#135bf1]">
                           {draftWordCount} palabras
@@ -1581,20 +1600,20 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                       {/* Live Feed Dialog Scroll Window */}
                       <div 
                         ref={liveScrollRef}
-                        className="w-full overflow-y-auto font-sans scroll-smooth pr-1 flex flex-col justify-start" 
-                        style={{ height: "550px", maxHeight: "550px", minHeight: "550px" }}
+                        className="w-full min-w-0 overflow-y-auto overflow-x-hidden font-sans scroll-smooth pr-1 flex flex-col justify-start" 
+                        style={{ height: "clamp(420px, 58vh, 620px)", maxHeight: "620px", minHeight: "420px" }}
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 rounded-full bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center font-bold text-xs shrink-0 select-none">
                             {captureSource === "screen" ? "🔊" : "🎙️"}
                           </div>
                           
-                          <div className="flex-grow bg-white border border-[#E9E9EB] p-4 rounded-2xl shadow-3xs">
+                          <div className="flex-grow min-w-0 bg-white border border-[#E9E9EB] p-4 rounded-2xl shadow-3xs">
                             <p className="text-[9.5px] font-extrabold text-[#135bf1] uppercase tracking-widest mb-1.5 leading-none">
                               Canal de Audio Directo / Clase
                             </p>
                             
-                            <div className="text-sm text-slate-800 font-normal leading-relaxed font-sans whitespace-pre-wrap select-text animate-fade-in">
+                            <div className="text-[15px] text-slate-800 font-normal leading-7 font-sans whitespace-pre-wrap select-text animate-fade-in">
                               {speechErrorNotice && (
                                 <div className="mb-4 p-3 bg-rose-50 border border-rose-100/90 rounded-xl text-[11px] font-semibold text-rose-600 flex items-start space-x-2">
                                   <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
@@ -1605,9 +1624,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                 <div className="space-y-2 bg-transparent pr-1">
                                   <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[9.5px] font-bold text-emerald-700 uppercase tracking-wider mb-2">
                                     <span className={`w-1.5 h-1.5 rounded-full ${isDigitalLiveTranscribing ? "bg-emerald-500 animate-pulse" : "bg-emerald-400"}`} />
-                                    <span>{isDigitalLiveTranscribing ? "Actualizando transcripciÃ³n digital..." : "TranscripciÃ³n digital en vivo"}</span>
+                                    <span>{isDigitalLiveTranscribing ? "Actualizando transcripción digital..." : "Transcripción digital en vivo"}</span>
                                   </div>
-                                  <div className="text-slate-800 font-normal whitespace-pre-wrap">{liveTranscript}</div>
+                                  <div className="text-slate-800 font-normal whitespace-pre-wrap text-justify [text-wrap:pretty]">{liveTranscript}</div>
                                 </div>
                               ) : captureSource === "screen" ? (
                                 <div className="text-slate-500 text-left py-12 flex flex-col items-center justify-center space-y-3 mt-4 px-4">
@@ -1616,12 +1635,12 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                     {isDigitalLiveTranscribing ? "Transcribiendo Audio Digital" : "Capturando Audio Digital"}
                                   </span>
                                   <span className="text-[11px] font-medium text-slate-400 text-center leading-relaxed">
-                                    Grabación de audio de pestaña/pantalla activa en segundo plano. La transcripción completa y el resumen se generarán con Gemini AI al hacer clic en <strong>"Terminar y Procesar"</strong>.
+                                    Grabación de audio de pestaña/pantalla activa en segundo plano. La transcripción completa se procesará al hacer clic en <strong>"Terminar y Procesar"</strong>.
                                   </span>
                                 </div>
                               ) : liveTranscript || interimTranscript ? (
                                 <div className="space-y-1 bg-transparent pr-1">
-                                  <span className="text-slate-800 font-normal">{liveTranscript}</span>
+                                  <span className="text-slate-800 font-normal text-justify [text-wrap:pretty]">{liveTranscript}</span>
                                   {interimTranscript && (
                                     <span className="text-slate-400 italic font-medium"> {interimTranscript}</span>
                                   )}
@@ -1646,7 +1665,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                           <span>
                             {isSyncingDraft 
                               ? "Autoguardado..." 
-                              : `Sincronizado con la Bóveda`
+                              : `Sincronizado con la bóveda`
                             }
                           </span>
                         </div>
@@ -1667,7 +1686,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                       <button
                         onClick={pauseRecording}
                         className="p-2 bg-white hover:bg-slate-50 rounded-full border border-slate-200 text-slate-600 hover:text-slate-800 transition-all cursor-pointer shadow-3xs active:scale-95"
-                        title={isPaused ? "Reanudar Sesión" : "OFF Sesión"}
+                        title={isPaused ? "Reanudar sesión" : "Pausar sesión"}
                       >
                         {isPaused ? <Play className="w-4 h-4 text-emerald-500 fill-emerald-500" /> : <Pause className="w-4 h-4" />}
                       </button>
@@ -1683,7 +1702,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                   </div>
 
                   {/* RIGHT COLUMN: PROFESSOR QUESTION COPILOT */}
-                  <div className="lg:col-span-4 flex flex-col items-stretch bg-slate-50 border border-slate-200/60 rounded-3xl p-4 relative min-h-[520px]">
+                  <div className="xl:col-span-4 min-w-0 flex flex-col items-stretch bg-slate-50 border border-slate-200/60 rounded-3xl p-4 relative min-h-[420px]">
                     {!isCopilotActive ? (
                       <>
                         {/* Header */}
@@ -1701,7 +1720,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                         </div>
 
                         {/* Ahorro Body */}
-                        <div className="flex flex-col items-center justify-center text-center p-4 my-auto">
+                        <div className="flex flex-col items-center justify-center text-center p-4 my-auto max-h-[360px]">
                           <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100/60 flex items-center justify-center text-indigo-550 mb-5 shadow-xs relative overflow-hidden ">
                             <Cpu className="w-6 h-6 text-[#135bf1] relative z-10" />
                             <div className="absolute inset-0 bg-gradient-to-tr from-[#135bf1]/10 to-transparent pointer-events-none" />
@@ -1852,7 +1871,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                         </div>
 
                         {/* FLOATING SUGGESTIONS CHIPS */}
-                        <div className="flex items-center space-x-1.5 mb-2 overflow-x-auto py-1 scroll-smooth">
+                        <div className="flex flex-wrap items-center gap-1.5 mb-2 py-1">
                           <button
                             type="button"
                             onClick={() => {

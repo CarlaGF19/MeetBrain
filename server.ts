@@ -29,6 +29,25 @@ function isValidGeminiApiKey(key: string | undefined): boolean {
   return true;
 }
 
+function toFriendlyGeminiError(error: any): string {
+  const raw = typeof error?.message === "string" ? error.message : String(error || "");
+  const lower = raw.toLowerCase();
+
+  if (raw.includes("429") || lower.includes("quota") || lower.includes("resource_exhausted")) {
+    return "Gemini alcanzó el límite de cuota de tu API key. Espera a que se renueve la cuota o usa otra clave en Settings.";
+  }
+
+  if (raw.includes("401") || raw.includes("403") || lower.includes("api key") || lower.includes("permission")) {
+    return "La API key de Gemini no es válida o no tiene permisos. Revisa la clave guardada en Settings.";
+  }
+
+  if (lower.includes("payload") || raw.includes("413")) {
+    return "El audio es demasiado pesado para procesarlo de una sola vez. Intenta una grabación más corta.";
+  }
+
+  return raw.length > 240 ? `${raw.slice(0, 240)}...` : raw;
+}
+
 // Load environment variables (from .env/process.env)
 dotenv.config();
 
@@ -240,7 +259,8 @@ app.post("/api/transcribe-live", async (req, res): Promise<any> => {
               "Transcribe exactamente el habla audible de este audio. " +
               "Si no hay voz clara o no puedes entenderla, devuelve transcript vacio y hasSpeech false. " +
               "No inventes nombres, temas, contexto, profesores, clases, videos ni frases. " +
-              "No resumas, no traduzcas, no agregues timestamps y conserva el idioma original.",
+              "No resumas, no traduzcas, no agregues timestamps. " +
+              "Si el idioma es ambiguo entre espanol y portugues, prioriza espanol latinoamericano y no uses vocabulario portugues salvo que sea claramente audible.",
           },
         ],
       },
@@ -278,7 +298,7 @@ app.post("/api/transcribe-live", async (req, res): Promise<any> => {
   } catch (error: any) {
     console.error("Live Transcribe API Error:", error);
     return res.status(500).json({
-      error: error.message || "No se pudo transcribir el segmento en vivo.",
+      error: toFriendlyGeminiError(error) || "No se pudo transcribir el segmento en vivo.",
     });
   }
 });
@@ -384,7 +404,7 @@ Specifically, generate:
   } catch (error: any) {
     console.error("Transcribe API Error Details:", error);
     return res.status(500).json({
-      error: error.message || "Failed to transcribe audio. Please verify your GEMINI_API_KEY is configured in Settings > Secrets.",
+      error: toFriendlyGeminiError(error) || "No se pudo transcribir el audio. Verifica tu API key de Gemini en Settings.",
     });
   }
 });
