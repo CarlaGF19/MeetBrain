@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { Mic, Square, Play, Pause, UploadCloud, FileAudio, AlertCircle, Sparkles, Brain, Tv, Volume2, FileDown, Check, Send, HelpCircle, GraduationCap, Search, ArrowRight, Loader2 } from "lucide-react";
+import { Mic, Square, Play, Pause, UploadCloud, FileAudio, AlertCircle, Sparkles, Brain, Tv, Volume2, FileDown, Check, Send, HelpCircle, GraduationCap, Search, ArrowRight, Loader2, Cpu } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
 
@@ -279,13 +279,21 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   }, []);
 
   const stopTracksAndTimers = () => {
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
     if (audioContextRef.current && audioContextRef.current.state !== "closed") {
       audioContextRef.current.close();
+      audioContextRef.current = null;
     }
     if (recognitionRef.current) {
       try {
@@ -329,7 +337,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     const height = canvas.height;
 
     const render = () => {
-      if (!isRecording) return;
+      if (!isRecordingRef.current) return;
       animationFrameRef.current = requestAnimationFrame(render);
 
       analyser.getByteFrequencyData(dataArray);
@@ -399,22 +407,18 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         try {
           let displayStream: MediaStream;
           try {
-            // Request a 1x1 pixel video track at 1fps to avoid GPU process memory leaks and sandboxing crashes
-            // in PWA window wrappers, while keeping the audio capture fully intact.
+            // Keep the browser display-capture pipeline standard and alive. Forcing
+            // a 1x1 video track can make Chrome/Edge show a black shared surface.
             displayStream = await navigator.mediaDevices.getDisplayMedia({
-              video: {
-                width: { max: 1 },
-                height: { max: 1 },
-                frameRate: { max: 1 }
-              },
+              video: true,
               audio: true
             } as any);
           } catch (e) {
-            console.warn("DisplayMedia with low-res video failed, trying simple vanilla fallback...", e);
+            console.warn("DisplayMedia with audio failed, trying video-only fallback...", e);
             try {
               displayStream = await navigator.mediaDevices.getDisplayMedia({
                 video: true,
-                audio: true
+                audio: false
               });
             } catch (err2) {
               console.error("Stable getDisplayMedia failed:", err2);
@@ -434,20 +438,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
             }
           }
           
-          // Mute video tracks (enabled = false) instead of stopping them immediately.
-          // Stopping video tracks immediately at start can crash the browser's media host process 
-          // (causing the tab to go black). Disabling them keeps the pipeline active but stops rendering 
-          // video frames, saving CPU/GPU without causing crashes.
-          displayStream.getVideoTracks().forEach((track) => {
-            try {
-              track.enabled = false;
-            } catch (e) {
-              console.warn("Failed to disable video track:", e);
-            }
-          });
-
           // Escuchar cuando el usuario hace clic en el botón nativo de "Dejar de compartir" del navegador para finalizar grabación limpiamente
-          audioTracks.forEach((track) => {
+          displayStream.getTracks().forEach((track) => {
             track.onended = () => {
               if (stopRecordingRef.current) {
                 stopRecordingRef.current();
@@ -500,6 +492,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(250); // Fetch packets in 250ms chunks
 
+      isRecordingRef.current = true;
+      isPausedRef.current = false;
       setIsRecording(true);
       setIsPaused(false);
       startVisualizer(stream);
@@ -624,10 +618,16 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     if (mediaRecorderRef.current && isRecording) {
       if (isPaused) {
         mediaRecorderRef.current.resume();
+        isPausedRef.current = false;
         setIsPaused(false);
         // Resume timer
+        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = setInterval(() => {
-          setDuration((prev) => prev + 1);
+          setDuration((prev) => {
+            const next = prev + 1;
+            durationRef.current = next;
+            return next;
+          });
         }, 1000);
         // Resume SpeechRecognition
         if (recognitionRef.current) {
@@ -637,8 +637,12 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         }
       } else {
         mediaRecorderRef.current.pause();
+        isPausedRef.current = true;
         setIsPaused(true);
-        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
         // Pause SpeechRecognition
         if (recognitionRef.current) {
           try {
@@ -723,6 +727,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       }
       mediaRecorderRef.current.stop();
       stopTracksAndTimers();
+      isRecordingRef.current = false;
+      isPausedRef.current = false;
       setIsRecording(false);
       setIsPaused(false);
 
