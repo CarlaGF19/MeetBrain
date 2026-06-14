@@ -16,12 +16,14 @@ import { Brain, Menu, X, LayoutDashboard, Mic, FolderOpen, Settings, LogOut, Cpu
 import { motion, AnimatePresence } from "motion/react";
 import {
   fetchUserMeetings,
+  fetchCurrentUser,
   saveMeetingToCloud,
   updateMeetingInCloud,
   deleteMeetingFromCloud,
   fetchUserSettings,
   saveUserSettingsToCloud,
-  deleteUserAccountFromCloud
+  deleteUserAccountFromCloud,
+  logoutLocalAccount
 } from "./lib/db";
 
 // 1. Pristine demo meetings seeding standard structured outputs
@@ -116,23 +118,25 @@ export default function App() {
   // Sidebar collapse state (closed/collapsed by default)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
-  // 1. Restore local user session from cache on mount
+  // 1. Restore local user session from the SQLite-backed backend cookie
   useEffect(() => {
-    const savedUser = localStorage.getItem("mb_user");
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      
-      // Load initial skipped state and visits for restored session
-      const visitedKey = `onboarding_visits_v1_${parsedUser.uid}`;
-      const savedVisits = parseInt(localStorage.getItem(visitedKey) || "0", 10);
-      const isSkipped = localStorage.getItem(`onboarding_skipped_v1_${parsedUser.uid}`) === "true";
-      setOnboardingSkipped(isSkipped);
-      setVisitCount(savedVisits);
+    fetchCurrentUser()
+      .then((restoredUser) => {
+        if (!restoredUser) return;
+        setUser(restoredUser);
 
-      const isNewUserRegistered = localStorage.getItem(`onboarding_new_user_v1_${parsedUser.uid}`) === "true";
-      setIsFirstTimeUser(isNewUserRegistered);
-    }
+        const visitedKey = `onboarding_visits_v1_${restoredUser.uid}`;
+        const savedVisits = parseInt(localStorage.getItem(visitedKey) || "0", 10);
+        const isSkipped = localStorage.getItem(`onboarding_skipped_v1_${restoredUser.uid}`) === "true";
+        setOnboardingSkipped(isSkipped);
+        setVisitCount(savedVisits);
+
+        const isNewUserRegistered = localStorage.getItem(`onboarding_new_user_v1_${restoredUser.uid}`) === "true";
+        setIsFirstTimeUser(isNewUserRegistered);
+      })
+      .catch((err) => {
+        console.warn("No active local session found:", err);
+      });
   }, []);
 
   // Update visits when user logs/re-logs in
@@ -160,7 +164,7 @@ export default function App() {
     }
   }, [user]);
 
-  // 2. Load settings and meeting records from cloud Firestore whenever the user alters
+  // 2. Load settings and meeting records from the local SQLite backend whenever the user changes
   useEffect(() => {
     if (!user) {
       setMeetings([]);
@@ -225,7 +229,6 @@ export default function App() {
 
   const handleLoginSuccess = (authenticatedUser: User, isNewUser?: boolean) => {
     setUser(authenticatedUser);
-    localStorage.setItem("mb_user", JSON.stringify(authenticatedUser));
     
     if (isNewUser) {
       setIsFirstTimeUser(true);
@@ -239,8 +242,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    logoutLocalAccount().catch((err) => console.warn("Local logout failed:", err));
     setUser(null);
-    localStorage.removeItem("mb_user");
     setMobileMenuOpen(false);
   };
 
@@ -461,29 +464,8 @@ export default function App() {
     return <LoginRegister onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Enforce onboarding / first setup if user has no API Key configured and has not skipped, and is a first-time user
-  if ((!settings.apiKey || settings.apiKey.trim() === "") && !onboardingSkipped && isFirstTimeUser) {
-    return (
-      <OnboardingScreen
-        user={user}
-        showSkip={true}
-        onSkip={() => {
-          setOnboardingSkipped(true);
-          setIsFirstTimeUser(false);
-          localStorage.removeItem(`onboarding_new_user_v1_${user.uid}`);
-          localStorage.setItem(`onboarding_skipped_v1_${user.uid}`, "true");
-        }}
-        onSaveApiKey={async (key) => {
-          const updatedSettings = { ...settings, apiKey: key };
-          setSettings(updatedSettings);
-          await saveUserSettingsToCloud(user.uid, updatedSettings);
-          setIsFirstTimeUser(false);
-          localStorage.removeItem(`onboarding_new_user_v1_${user.uid}`);
-        }}
-        onLogout={handleLogout}
-      />
-    );
-  }
+  const shouldShowApiSetupModal =
+    (!settings.apiKey || settings.apiKey.trim() === "") && !onboardingSkipped && isFirstTimeUser;
 
   return (
     <div className="min-h-screen bg-white flex text-slate-900 font-sans antialiased overflow-x-hidden">
@@ -648,6 +630,28 @@ export default function App() {
           </AnimatePresence>
         </main>
       </div>
+
+      <AnimatePresence>
+        {shouldShowApiSetupModal && (
+          <OnboardingScreen
+            user={user}
+            showSkip={true}
+            onSkip={() => {
+              setOnboardingSkipped(true);
+              setIsFirstTimeUser(false);
+              localStorage.removeItem(`onboarding_new_user_v1_${user.uid}`);
+              localStorage.setItem(`onboarding_skipped_v1_${user.uid}`, "true");
+            }}
+            onSaveApiKey={async (key) => {
+              const updatedSettings = { ...settings, apiKey: key };
+              setSettings(updatedSettings);
+              await saveUserSettingsToCloud(user.uid, updatedSettings);
+              setIsFirstTimeUser(false);
+              localStorage.removeItem(`onboarding_new_user_v1_${user.uid}`);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
     </div>
   );

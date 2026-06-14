@@ -4,11 +4,26 @@ import fs from "fs";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import nodemailer from "nodemailer";
+import {
+  deleteAccount,
+  deleteMeeting,
+  getSettings,
+  getUserFromSession,
+  listMeetings,
+  loginLocalUser,
+  logoutLocalSession,
+  PublicLocalUser,
+  registerLocalUser,
+  resetLocalPassword,
+  saveMeeting,
+  saveSettings,
+  updateMeeting,
+} from "./localDb";
 
 function isValidGeminiApiKey(key: string | undefined): boolean {
   if (!key) return false;
   const cleanKey = key.trim();
-  if (cleanKey === "" || cleanKey.toUpperCase() === "MY_GEMINI_API_KEY" || cleanKey.length < 10) {
+  if (cleanKey === "" || cleanKey.toUpperCase() === "MY_GEMINI_API_KEY") {
     return false;
   }
   return true;
@@ -23,6 +38,46 @@ const PORT = 3000;
 // Set maximum request size to support larger audio file uploads
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
+
+const SESSION_COOKIE = "mb_session";
+
+function readCookie(req: express.Request, name: string): string | null {
+  const raw = req.headers.cookie;
+  if (!raw) return null;
+  const found = raw
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${name}=`));
+  return found ? decodeURIComponent(found.slice(name.length + 1)) : null;
+}
+
+function setSessionCookie(res: express.Response, token: string) {
+  const secure = process.env.NODE_ENV === "production";
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure,
+    path: "/",
+    maxAge: 14 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearSessionCookie(res: express.Response) {
+  res.clearCookie(SESSION_COOKIE, { path: "/" });
+}
+
+async function requireLocalUser(req: express.Request, res: express.Response, next: express.NextFunction) {
+  try {
+    const user = await getUserFromSession(readCookie(req, SESSION_COOKIE));
+    if (!user) {
+      return res.status(401).json({ error: "Sesion local expirada o no iniciada." });
+    }
+    (req as any).localUser = user;
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
 
 // Lazy initializer for Google GenAI client
 let aiClient: GoogleGenAI | null = null;
@@ -47,6 +102,185 @@ function getGeminiClient(): GoogleGenAI {
 // REST API Routes
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "MeetingBrain backend is fully operational" });
+});
+
+// Local authentication and SQLite data routes
+app.post("/api/auth/register", async (req, res): Promise<any> => {
+  try {
+    const { username, email, password } = req.body;
+    const result = await registerLocalUser(username || "", email || "", password || "");
+    setSessionCookie(res, result.sessionToken);
+    return res.json({
+      user: result.user,
+      recoveryCode: result.recoveryCode,
+    });
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message || "No se pudo crear la cuenta local." });
+  }
+});
+
+app.post("/api/auth/login", async (req, res): Promise<any> => {
+  try {
+    const { identifier, password } = req.body;
+    const result = await loginLocalUser(identifier || "", password || "");
+    setSessionCookie(res, result.sessionToken);
+    return res.json({ user: result.user });
+  } catch (error: any) {
+    return res.status(401).json({ error: error.message || "No se pudo iniciar sesion." });
+  }
+});
+
+app.post("/api/auth/logout", async (req, res): Promise<any> => {
+  await logoutLocalSession(readCookie(req, SESSION_COOKIE));
+  clearSessionCookie(res);
+  return res.json({ ok: true });
+});
+
+app.get("/api/auth/me", async (req, res): Promise<any> => {
+  const user = await getUserFromSession(readCookie(req, SESSION_COOKIE));
+  if (!user) return res.status(401).json({ user: null });
+  return res.json({ user });
+});
+
+app.post("/api/auth/reset-password", async (req, res): Promise<any> => {
+  try {
+    const { identifier, recoveryCode, newPassword } = req.body;
+    const result = await resetLocalPassword(identifier || "", recoveryCode || "", newPassword || "");
+    clearSessionCookie(res);
+    return res.json(result);
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message || "No se pudo restablecer la contrasena." });
+  }
+});
+
+app.get("/api/meetings", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  return res.json({ meetings: await listMeetings(user.uid) });
+});
+
+app.post("/api/meetings", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  await saveMeeting(user.uid, req.body);
+  return res.json({ ok: true });
+});
+
+app.patch("/api/meetings/:id", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  await updateMeeting(user.uid, req.params.id, req.body);
+  return res.json({ ok: true });
+});
+
+app.delete("/api/meetings/:id", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  await deleteMeeting(user.uid, req.params.id);
+  return res.json({ ok: true });
+});
+
+app.get("/api/settings", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  return res.json({ settings: await getSettings(user.uid) });
+});
+
+app.put("/api/settings", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  await saveSettings(user.uid, req.body);
+  return res.json({ ok: true });
+});
+
+app.delete("/api/account", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  await deleteAccount(user.uid);
+  clearSessionCookie(res);
+  return res.json({ ok: true });
+});
+
+// Short live transcription endpoint. It must not summarize or invent context.
+app.post("/api/transcribe-live", async (req, res): Promise<any> => {
+  try {
+    const { audio, mimeType, apiKey } = req.body;
+
+    if (!audio) {
+      return res.status(400).json({ error: "Missing audio data in base64 format." });
+    }
+
+    const isCustomKeyValid = isValidGeminiApiKey(apiKey);
+    const resolvedApiKey = isCustomKeyValid ? apiKey.trim() : process.env.GEMINI_API_KEY;
+    if (!isValidGeminiApiKey(resolvedApiKey)) {
+      return res.status(400).json({
+        error: "No se ha configurado una API Key de Gemini valida. Guardala en Settings para usar transcripcion IA."
+      });
+    }
+
+    let cleanBase64 = audio;
+    if (audio.includes(";base64,")) {
+      cleanBase64 = audio.split(";base64,")[1];
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey: resolvedApiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "meetbrain-local",
+        },
+      },
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType || "audio/wav",
+              data: cleanBase64,
+            },
+          },
+          {
+            text:
+              "Transcribe exactamente el habla audible de este audio. " +
+              "Si no hay voz clara o no puedes entenderla, devuelve transcript vacio y hasSpeech false. " +
+              "No inventes nombres, temas, contexto, profesores, clases, videos ni frases. " +
+              "No resumas, no traduzcas, no agregues timestamps y conserva el idioma original.",
+          },
+        ],
+      },
+      config: {
+        systemInstruction:
+          "You are a strict speech-to-text engine. Return only what is clearly audible. Never infer missing content.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            transcript: {
+              type: Type.STRING,
+              description: "Exact audible transcript only. Empty string when speech is unclear or absent.",
+            },
+            hasSpeech: {
+              type: Type.BOOLEAN,
+              description: "True only when the audio contains clear intelligible speech.",
+            },
+          },
+          required: ["transcript", "hasSpeech"],
+        },
+      },
+    });
+
+    if (!response.text) {
+      return res.json({ transcript: "", hasSpeech: false });
+    }
+
+    const result = JSON.parse(response.text);
+    const transcript = typeof result.transcript === "string" ? result.transcript.trim() : "";
+    return res.json({
+      transcript,
+      hasSpeech: !!result.hasSpeech && transcript.length > 0,
+    });
+  } catch (error: any) {
+    console.error("Live Transcribe API Error:", error);
+    return res.status(500).json({
+      error: error.message || "No se pudo transcribir el segmento en vivo.",
+    });
+  }
 });
 
 // Transcribe and analyze audio

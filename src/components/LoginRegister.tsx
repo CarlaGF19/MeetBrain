@@ -3,76 +3,45 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { User } from "../types";
+import { loginLocalAccount, registerLocalAccount, resetLocalPassword } from "../lib/db";
 import { motion, AnimatePresence } from "motion/react";
-import { auth } from "../lib/firebase";
-import { signInWithPopup, GoogleAuthProvider, getAdditionalUserInfo } from "firebase/auth";
-import { 
-  Sparkles, 
-  AlertCircle, 
-  Info, 
-  Mic, 
-  FileText, 
-  Bot, 
-  Lock, 
-  ShieldCheck,
-  CheckCircle,
+import {
+  AlertCircle,
   ArrowRight,
-  Cpu
+  Bot,
+  CheckCircle,
+  FileText,
+  KeyRound,
+  Lock,
+  Mail,
+  Mic,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
 } from "lucide-react";
 
-interface TiltCardProps {
-  children: React.ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
-}
-
-function TiltCard({ children, className, style }: TiltCardProps) {
-  const [tiltStyle, setTiltStyle] = useState<React.CSSProperties>({});
-  
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const card = e.currentTarget;
-    const box = card.getBoundingClientRect();
-    const x = e.clientX - box.left - box.width / 2;
-    const y = e.clientY - box.top - box.height / 2;
-    
-    const tiltX = -(y / (box.height / 2)) * 8;
-    const tiltY = (x / (box.width / 2)) * 8;
-    
-    setTiltStyle({
-      transform: `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale3d(1.03, 1.03, 1.03)`,
-      transition: "transform 0.1s ease-out",
-    });
-  };
-  
-  const handleMouseLeave = () => {
-    setTiltStyle({
-      transform: `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`,
-      transition: "transform 0.4s ease-out",
-    });
-  };
-
-  return (
-    <div
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      style={{ ...style, ...tiltStyle }}
-      className={className}
-    >
-      {children}
-    </div>
-  );
-}
+type Mode = "login" | "register" | "reset";
 
 interface LoginRegisterProps {
   onLoginSuccess: (user: User, isNewUser?: boolean) => void;
 }
 
 export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
+  const [mode, setMode] = useState<Mode>("login");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [identifier, setIdentifier] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [pendingUser, setPendingUser] = useState<User | null>(null);
+  const [newRecoveryCode, setNewRecoveryCode] = useState("");
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -81,248 +50,319 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
     };
   }, []);
 
-  const handleGoogleOAuth = async () => {
-    setIsLoading(true);
+  const resetMessages = () => {
     setError("");
-    setInfoMessage(null);
+    setNewRecoveryCode("");
+  };
 
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setIsLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      const result = await signInWithPopup(auth, provider);
-      const firebaseUser = result.user;
-      
-      const additionalInfo = getAdditionalUserInfo(result);
-      const isNewUser = additionalInfo?.isNewUser ?? false;
-      
-      onLoginSuccess({
-        uid: firebaseUser.uid,
-        email: firebaseUser.email || "username45usario@gmail.com",
-        displayName: firebaseUser.displayName || "Usuario Olli",
-        photoURL: firebaseUser.photoURL || undefined,
-      }, isNewUser);
+      const result = await loginLocalAccount(identifier.trim(), loginPassword);
+      onLoginSuccess(result.user, false);
     } catch (err: any) {
-      console.error("Firebase Google Auth failed:", err);
-      
-      if (err.code === "auth/popup-closed-by-user") {
-        setError("La ventana de autenticación fue cerrada antes de completarla.");
-      } else {
-        setError(err.message || "Fallo inesperado al conectar con Google.");
-      }
-
-      setInfoMessage("Asegúrate de permitir las ventanas emergentes (popups) en tu navegador para iniciar sesión segura.");
+      setError(err.message || "No se pudo iniciar sesion.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  return (
-    <div id="login_screen_wrapper" className="h-screen w-screen bg-gradient-to-tr from-[#020617] via-[#0b1329] to-[#040815] flex items-center justify-center select-none font-sans relative overflow-hidden p-4">
-      
-      {/* Dynamic Glowing Ambient Light Orbs for Glassmorphism Background depth */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-gradient-to-tr from-[#004ac6]/20 to-[#2563eb]/5 filter blur-[120px] pointer-events-none animate-[pulse_8s_infinite_alternate]" />
-      <div className="absolute bottom-[-15%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-gradient-to-bl from-[#fea619]/10 to-transparent filter blur-[150px] pointer-events-none animate-[pulse_10s_infinite_alternate]" />
-      <div className="absolute top-[40%] left-[30%] w-[30vw] h-[30vw] rounded-full bg-[#00ffcc]/5 filter blur-[100px] pointer-events-none animate-[pulse_12s_infinite]" />
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    if (password !== confirmPassword) {
+      setError("Las contrasenas no coinciden.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const result = await registerLocalAccount(username.trim(), email.trim(), password);
+      setPendingUser(result.user);
+      setNewRecoveryCode(result.recoveryCode);
+    } catch (err: any) {
+      setError(err.message || "No se pudo crear la cuenta.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      {/* Main Container - Full viewport glass frame */}
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setIsLoading(true);
+    try {
+      const result = await resetLocalPassword(identifier.trim(), recoveryCode.trim(), newPassword);
+      setNewRecoveryCode(result.newRecoveryCode);
+      setLoginPassword("");
+      setPassword("");
+      setConfirmPassword("");
+      setNewPassword("");
+    } catch (err: any) {
+      setError(err.message || "No se pudo restablecer la contrasena.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const finishRegistration = () => {
+    if (pendingUser) onLoginSuccess(pendingUser, true);
+  };
+
+  const tabs = [
+    { id: "login" as const, label: "Iniciar sesion" },
+    { id: "register" as const, label: "Crear cuenta" },
+  ];
+
+  return (
+    <div className="h-screen w-screen bg-[#07111f] flex items-center justify-center select-none font-sans relative overflow-hidden p-4">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(19,91,241,0.30),transparent_32%),radial-gradient(circle_at_82%_80%,rgba(20,184,166,0.18),transparent_34%)] pointer-events-none" />
+
       <motion.div
-        id="desktop_login_card"
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full max-w-7xl max-h-[92vh] mx-auto bg-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10 shadow-[0_24px_80px_rgba(0,0,0,0.4)] my-auto self-center"
+        transition={{ duration: 0.45 }}
+        className="w-full max-w-6xl max-h-[92vh] mx-auto bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10 shadow-[0_24px_80px_rgba(0,0,0,0.38)]"
       >
-        
-        {/* LEFT COLUMN (7 Cols) - Olli Value Prop & Glassmorphic Tiles */}
-        <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-between relative overflow-y-auto max-h-[92vh]">
-          
-          {/* Header Brand */}
-          <div className="flex items-center gap-2.5 text-left mb-10 lg:mb-0">
-            <div className="flex items-center justify-center gap-1 shrink-0 bg-white/5 px-3 py-2.5 rounded-xl border border-white/10 shadow-inner">
-              <span className="w-1 h-6 rounded-full bg-[#004ac6] animate-[pulse_1.2s_infinite]" />
-              <span className="w-1 h-4 rounded-full bg-[#00a8e8] animate-[pulse_1.5s_infinite]" />
-              <span className="w-1 h-5 rounded-full bg-[#2563eb] animate-[pulse_1.8s_infinite]" />
-              <span className="w-1 h-3 rounded-full bg-[#a855f7] animate-[pulse_1.4s_infinite]" />
+        <div className="lg:col-span-7 p-8 lg:p-10 flex flex-col justify-between overflow-y-auto max-h-[92vh]">
+          <div className="flex items-center gap-2.5 text-left mb-8">
+            <div className="flex items-center justify-center gap-1 shrink-0 bg-white/5 px-3 py-2.5 rounded-xl border border-white/10">
+              <span className="w-1 h-6 rounded-full bg-[#135bf1]" />
+              <span className="w-1 h-4 rounded-full bg-cyan-400" />
+              <span className="w-1 h-5 rounded-full bg-teal-400" />
             </div>
-            <div>
-              <span className="font-display font-black text-2xl tracking-tighter text-white flex items-center">
-                Olli<span className="text-[#00a8e8] ml-[1px] font-black">.</span>
-              </span>
-            </div>
+            <span className="font-display font-black text-2xl tracking-tighter text-white">
+              MeetBrain<span className="text-cyan-300 ml-[1px]">.</span>
+            </span>
           </div>
- 
-          {/* Main Info Hero */}
+
           <div className="max-w-xl w-full my-auto py-8 text-left">
-            
-            {/* Title corresponding to Headline-LG with gorgeous clip gradient */}
             <h1 className="font-display text-3xl sm:text-[42px] font-black text-white tracking-tight leading-[44px] sm:leading-[52px]">
-              Revoluciona tus <br />
-              reuniones con <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-[#fea619] animate-gradient">
-                inteligencia pura.
+              Tu espacio local para <br />
+              transcribir reuniones <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-blue-300 to-teal-300">
+                sin depender de Google Login.
               </span>
             </h1>
-
-            {/* Body Description corresponding to Body-LG */}
             <p className="font-sans text-sm sm:text-base text-slate-300 font-light mt-4 leading-relaxed max-w-lg">
-              Transforma el caos en claridad. Olli estructura tus conversaciones directamente en decisiones y planes de acción procesables al instante.
+              Usuarios, reuniones y configuracion viven en SQLite dentro de tu equipo. Solo la API de Gemini se usa cuando decides transcribir o resumir.
             </p>
 
-            {/* Feature Bento Grid with Glassmorphic blocks */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-5">
-              
-              {/* Feature 1: Live Record */}
-              <TiltCard className="p-4 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-2.5">
-                  <Mic className="w-5 h-5" />
-                </div>
-                <h3 className="font-display text-sm font-semibold text-white">Captura Precisa</h3>
-                <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">
-                  Transcripción en tiempo real impulsada por IA, sin perder un solo detalle crítico.
-                </p>
-              </TiltCard>
-
-              {/* Feature 2: Structured Document */}
-              <TiltCard className="p-4 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-2.5">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <h3 className="font-display text-sm font-semibold text-white">Síntesis Automática</h3>
-                <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">
-                  Generación instantánea de resúmenes estructurados y tareas asignables.
-                </p>
-              </TiltCard>
-
-              {/* Feature 3: Copilot */}
-              <TiltCard className="p-4 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#fea619] mb-2.5">
-                  <Bot className="w-5 h-5" />
-                </div>
-                <h3 className="font-display text-sm font-semibold text-white">IA Conversacional</h3>
-                <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">
-                  Interactúa con tus transcripciones para extraer insights ocultos al instante.
-                </p>
-              </TiltCard>
-
-              {/* Feature 4: High Reliability Protection */}
-              <TiltCard className="p-4 bg-white/[0.03] backdrop-blur-md rounded-2xl border border-white/5 hover:border-white/12 hover:bg-white/[0.05] shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-300">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-2.5">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <h3 className="font-display text-sm font-semibold text-white">Seguridad Total</h3>
-                <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">
-                  Infraestructura blindada para mantener la confidencialidad absoluta de tus datos.
-                </p>
-              </TiltCard>
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-6">
+              {[
+                { icon: Mic, title: "Captura local", text: "Graba microfono o audio digital desde Edge/Chrome." },
+                { icon: FileText, title: "Actas privadas", text: "Guarda transcripciones y resumenes en tu base SQLite." },
+                { icon: Bot, title: "IA opcional", text: "Gemini solo procesa audio cuando configuras tu API Key." },
+                { icon: ShieldCheck, title: "Sin Firebase", text: "Sin cuentas Google, Firestore ni dependencia de Vercel." },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.title} className="p-4 bg-white/[0.04] rounded-2xl border border-white/8">
+                    <div className="w-9 h-9 rounded-xl bg-cyan-400/10 border border-cyan-300/15 flex items-center justify-center text-cyan-300 mb-2.5">
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <h3 className="font-display text-sm font-semibold text-white">{item.title}</h3>
+                    <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">{item.text}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
-
-          <div className="text-left text-[11px] text-slate-500 font-light mt-6 lg:block hidden">
-            <span>Tecnología inteligente integrada con Olli IA.</span>
-          </div>
-
         </div>
 
-        {/* RIGHT COLUMN (5 Cols) - Vibrant Glowing Blue-Cyan Glassmorphic Portal */}
-        <div className="lg:col-span-5 p-6 sm:p-14 lg:p-16 flex flex-col justify-center items-stretch bg-white/[0.01] relative">
-          
+        <div className="lg:col-span-5 p-6 sm:p-10 lg:p-14 flex flex-col justify-center items-stretch bg-white/[0.02] relative">
           <div className="my-auto max-w-sm mx-auto w-full">
-            
-            {/* Glowing Blue-Cyan Neon Glassmorphism Card */}
-            <TiltCard className="bg-gradient-to-b from-[#004ac6]/90 via-[#0053db]/95 to-[#00a8e8]/90 backdrop-blur-2xl rounded-3xl border border-white/25 p-7 shadow-[0_20px_50px_rgba(0,168,232,0.25)] text-center relative overflow-hidden">
-              
-              {/* Highlight Overlay effect */}
-              <div className="absolute inset-0 bg-linear-to-tr from-white/0 via-white/5 to-white/15 pointer-events-none" />
+            <div className="bg-white rounded-3xl border border-white/40 p-7 shadow-[0_20px_50px_rgba(0,0,0,0.22)] text-left relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#135bf1] via-cyan-400 to-teal-300" />
 
-              {/* Top Accent line */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
+              {pendingUser && newRecoveryCode ? (
+                <div className="space-y-5">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-xl font-black text-slate-900 tracking-tight">Cuenta creada</h2>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      Guarda este codigo. Lo necesitaras si olvidas tu contrasena. Por seguridad solo se muestra una vez.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-950 text-white font-mono text-center text-lg tracking-widest border border-slate-800">
+                    {newRecoveryCode}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={finishRegistration}
+                    className="w-full h-11 rounded-xl bg-[#135bf1] hover:bg-[#0746cc] text-white text-sm font-bold flex items-center justify-center gap-2"
+                  >
+                    Continuar
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h2 className="font-display text-2xl font-black text-slate-900 tracking-tight">
+                    Acceso local
+                  </h2>
+                  <p className="font-sans text-xs text-slate-500 mt-2 leading-relaxed">
+                    Entra con tu usuario local. No necesitas Google para abrir tu boveda.
+                  </p>
 
-              {/* High Contrast Headings */}
-              <h2 className="font-display text-2xl font-bold text-white tracking-tight">
-                Acceso Restringido
-              </h2>
-              <p className="font-sans text-xs text-blue-100/80 mt-2.5 leading-relaxed">
-                Ingresa para sincronizar tus espacios de trabajo y continuar donde lo dejaste.
-              </p>
+                  <div className="grid grid-cols-2 gap-1 bg-slate-100 rounded-xl p-1 mt-6">
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => {
+                          setMode(tab.id);
+                          resetMessages();
+                        }}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all ${
+                          mode === tab.id ? "bg-white text-[#135bf1] shadow-sm" : "text-slate-500"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
 
-              <div className="mt-8 space-y-4">
-                
-                {/* Main Google Sign-In Button (Solid white with animated hover) */}
-                <motion.button
-                  type="button"
-                  id="google_signin_btn"
-                  onClick={handleGoogleOAuth}
-                  disabled={isLoading}
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full bg-[#ffffff] hover:bg-slate-55 text-slate-900 font-semibold py-3 px-5 rounded-xl shadow-[0_8px_20px_rgba(0,0,0,0.15)] flex items-center justify-center gap-3.5 transition-all text-sm cursor-pointer select-none disabled:opacity-75 h-12"
-                >
-                  {isLoading ? (
-                    <span className="border-2 border-slate-900/20 border-t-slate-900 rounded-full w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24">
-                          <path
-                            fill="#EA4335"
-                            d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.14-5.136 4.14-3.41 0-6.173-2.784-6.173-6.225s2.763-6.226 6.173-6.226c1.55 0 2.96.568 4.05 1.503l3.056-3.055C19.123 2.115 15.935 1 12.24 1 6.13 1 1.135 6 1.135 12.16s4.996 11.16 11.105 11.16c6.07 0 10.99-4.8 10.99-11.16 0-.6-.051-1.2-.162-1.875H12.24z"
-                          />
-                        </svg>
+                  <AnimatePresence mode="wait">
+                    {mode === "login" && (
+                      <motion.form
+                        key="login"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        onSubmit={handleLogin}
+                        className="mt-6 space-y-3"
+                      >
+                        <Field icon={UserRound} value={identifier} onChange={setIdentifier} placeholder="Usuario o correo" />
+                        <Field icon={Lock} value={loginPassword} onChange={setLoginPassword} placeholder="Contrasena" type="password" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMode("reset");
+                            resetMessages();
+                          }}
+                          className="text-[11px] font-bold text-[#135bf1] hover:underline"
+                        >
+                          Olvide mi contrasena
+                        </button>
+                        <SubmitButton isLoading={isLoading} label="Iniciar sesion" />
+                      </motion.form>
+                    )}
+
+                    {mode === "register" && (
+                      <motion.form
+                        key="register"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        onSubmit={handleRegister}
+                        className="mt-6 space-y-3"
+                      >
+                        <Field icon={UserRound} value={username} onChange={setUsername} placeholder="Usuario" />
+                        <Field icon={Mail} value={email} onChange={setEmail} placeholder="Correo" type="email" />
+                        <Field icon={Lock} value={password} onChange={setPassword} placeholder="Contrasena minima 8 caracteres" type="password" />
+                        <Field icon={Lock} value={confirmPassword} onChange={setConfirmPassword} placeholder="Confirmar contrasena" type="password" />
+                        <SubmitButton isLoading={isLoading} label="Crear cuenta local" />
+                      </motion.form>
+                    )}
+
+                    {mode === "reset" && (
+                      <motion.form
+                        key="reset"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        onSubmit={handleResetPassword}
+                        className="mt-6 space-y-3"
+                      >
+                        <Field icon={UserRound} value={identifier} onChange={setIdentifier} placeholder="Usuario o correo" />
+                        <Field icon={KeyRound} value={recoveryCode} onChange={setRecoveryCode} placeholder="Codigo de recuperacion MB-..." />
+                        <Field icon={Lock} value={newPassword} onChange={setNewPassword} placeholder="Nueva contrasena" type="password" />
+                        <SubmitButton isLoading={isLoading} label="Restablecer contrasena" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMode("login");
+                            resetMessages();
+                          }}
+                          className="text-[11px] font-bold text-slate-500 hover:text-slate-800"
+                        >
+                          Volver al login
+                        </button>
+                      </motion.form>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="min-h-[50px] mt-5">
+                    {error && (
+                      <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-[11px] font-semibold text-rose-700 flex gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{error}</span>
                       </div>
-                      <span className="tracking-tight text-slate-900 font-bold">Iniciar sesión con Google</span>
-                    </>
-                  )}
-                </motion.button>
-
-              </div>
-
-              {/* Interactive Alert Panels for Popups or Failures */}
-              <div className="min-h-[48px] mt-6 flex items-center justify-center">
-                <AnimatePresence mode="wait">
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="bg-black/25 border border-white/10 rounded-xl p-3 text-[11px] font-medium text-white flex items-start space-x-2 text-left w-full shadow-inner"
-                    >
-                      <AlertCircle className="w-4 h-4 text-rose-455 shrink-0 mt-0.5" />
-                      <span>{error}</span>
-                    </motion.div>
-                  )}
-
-                  {!error && infoMessage && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="bg-black/20 border border-white/10 rounded-xl p-3 text-[11px] font-medium text-blue-100 flex items-start space-x-2 text-left w-full"
-                    >
-                      <Info className="w-4 h-4 text-cyan-300 shrink-0 mt-0.5" />
-                      <span>{infoMessage}</span>
-                    </motion.div>
-                  )}
-
-                  {!error && !infoMessage && (
-                    <motion.span
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 0.8 }}
-                      className="text-[10px] text-blue-100/85 font-normal leading-relaxed block text-center"
-                    >
-                      🔐 Autenticación segura gestionada a través de Google. Tus datos están protegidos.
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </div>
-
-            </TiltCard>
-
+                    )}
+                    {!error && mode === "reset" && newRecoveryCode && (
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-[11px] font-semibold text-emerald-800">
+                        Contrasena actualizada. Tu nuevo codigo de recuperacion es:
+                        <div className="font-mono text-center text-sm mt-2">{newRecoveryCode}</div>
+                      </div>
+                    )}
+                    {!error && !(mode === "reset" && newRecoveryCode) && (
+                      <div className="text-[10px] text-slate-400 leading-relaxed flex gap-2">
+                        <Sparkles className="w-3.5 h-3.5 shrink-0 text-[#135bf1]" />
+                        <span>La base vive localmente en SQLite. No se suben cuentas ni reuniones a GitHub.</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-
         </div>
-
       </motion.div>
     </div>
+  );
+}
+
+function Field({
+  icon: Icon,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  icon: React.ElementType;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  type?: string;
+}) {
+  return (
+    <label className="relative block">
+      <Icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+      <input
+        required
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full h-11 rounded-xl bg-slate-50 border border-slate-200 pl-10 pr-3 text-sm font-medium text-slate-800 outline-none focus:border-[#135bf1] focus:bg-white transition-all"
+      />
+    </label>
+  );
+}
+
+function SubmitButton({ isLoading, label }: { isLoading: boolean; label: string }) {
+  return (
+    <button
+      type="submit"
+      disabled={isLoading}
+      className="w-full h-11 rounded-xl bg-[#135bf1] hover:bg-[#0746cc] text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-70"
+    >
+      {isLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : label}
+      {!isLoading && <ArrowRight className="w-4 h-4" />}
+    </button>
   );
 }

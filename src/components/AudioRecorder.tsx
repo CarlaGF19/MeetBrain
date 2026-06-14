@@ -52,13 +52,14 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   // Live real-time speech states
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
+  const [isDigitalLiveTranscribing, setIsDigitalLiveTranscribing] = useState(false);
 
   // Live Copilot chat states
   const [isCopilotActive, setIsCopilotActive] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string; timestamp?: string }>>([
     {
       role: "assistant",
-      content: "¡Hola! Estoy listo para escuchar la transcripción en vivo de tu clase. Cuando el profesor o los oradores expongan preguntas, dudas o temas clave, los detectaré automáticamente o me los podrás preguntar para que te busque la respuesta al instante.",
+      content: "Copiloto de preguntas listo. Activalo cuando quieras detectar preguntas del profesor o escribir rapidamente la pregunta que te hicieron.",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     }
   ]);
@@ -67,9 +68,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const [detectedQuestions, setDetectedQuestions] = useState<string[]>([]);
   const [isDetectingQuestions, setIsDetectingQuestions] = useState(false);
 
-  // Helper to auto-extract quick questions with Regex
+  // Helper to auto-extract quick professor questions without turning live mode into Explore.
   const autoDetectQuestionsFromText = (text: string) => {
-    const regex = /¿([^?]+)\?/g;
+    const regex = /[¿?]?\b((?:que|qu\u00e9|cual|cu\u00e1l|cuantos|cu\u00e1ntos|por que|por qu\u00e9|como|c\u00f3mo|quien|qui\u00e9n|alguien)\b[^.?!]{8,140})\?/gi;
     const questions: string[] = [];
     let match;
     while ((match = regex.exec(text)) !== null) {
@@ -79,22 +80,33 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       }
     }
     const words = text.toLowerCase();
-    const keywords = ["la tarea es", "pregunta de examen", "examen", "para la próxima semana", "la duda es"];
+    const keywords = [
+      "quien me dice",
+      "quién me dice",
+      "alguien sabe",
+      "quien sabe",
+      "qué significa",
+      "que significa",
+      "cuantos",
+      "cuántos",
+      "cual es",
+      "cuál es",
+    ];
     keywords.forEach(kw => {
       if (words.includes(kw)) {
         const idx = words.indexOf(kw);
-        const sentence = text.substring(Math.max(0, idx - 10), Math.min(text.length, idx + 100)).trim();
+        const sentence = text.substring(Math.max(0, idx - 10), Math.min(text.length, idx + 130)).split(/[.\n]/)[0].trim();
         if (sentence && !questions.includes(sentence)) {
-          questions.push(`Pregunta/Dato: "...${sentence}..."`);
+          questions.push(sentence.endsWith("?") ? sentence : `${sentence}?`);
         }
       }
     });
     return Array.from(new Set(questions)).slice(-5);
   };
 
-  // Listen to liveTranscript to auto-extract quick questions with regex
+  // Listen to liveTranscript only when the questions copilot is ON.
   useEffect(() => {
-    if (!liveTranscript) return;
+    if (!isCopilotActive || !liveTranscript) return;
     const questions = autoDetectQuestionsFromText(liveTranscript);
     if (questions.length > 0) {
       setDetectedQuestions((prev) => {
@@ -102,7 +114,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         return combined.slice(-5);
       });
     }
-  }, [liveTranscript]);
+  }, [isCopilotActive, liveTranscript]);
 
   const handleSendLiveChat = async (questionText: string) => {
     if (!questionText.trim()) return;
@@ -168,7 +180,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
     setIsDetectingQuestions(true);
     try {
-      const scanPrompt = "Analiza la transcripción actual e identifica de 2 a 4 preguntas clave, inquietudes, dudas o conceptos de clase que el profesor o los oradores estén explicando o formulando. Devuelve únicamente una lista compacta en español donde cada pregunta aparezca en una línea nueva comenzando por un guion (-), por ejemplo: '- ¿Qué relación hay entre los átomos?'. No devuelvas explicaciones ni números, solo la lista de guiones.";
+      const scanPrompt = "Identifica hasta 3 preguntas explicitas que el profesor u orador haya formulado para que un estudiante responda. No incluyas resumenes, tareas, conceptos sueltos, temas de clase ni actividades. Devuelve solo una lista en espanol, una pregunta por linea, cada linea empezando por guion (-). Si no hay preguntas reales, devuelve una lista vacia.";
       
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -230,6 +242,13 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   // Refs for audio capturing
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const liveChunkTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const liveChunkInFlightRef = useRef(false);
+  const digitalLiveAudioContextRef = useRef<AudioContext | null>(null);
+  const digitalLiveSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const digitalLiveProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const digitalLiveGainRef = useRef<GainNode | null>(null);
+  const digitalLiveSamplesRef = useRef<Float32Array[]>([]);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -283,6 +302,35 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
+    if (liveChunkTimerRef.current) {
+      clearInterval(liveChunkTimerRef.current);
+      liveChunkTimerRef.current = null;
+    }
+    if (digitalLiveProcessorRef.current) {
+      try {
+        digitalLiveProcessorRef.current.disconnect();
+      } catch (e) {}
+      digitalLiveProcessorRef.current = null;
+    }
+    if (digitalLiveSourceRef.current) {
+      try {
+        digitalLiveSourceRef.current.disconnect();
+      } catch (e) {}
+      digitalLiveSourceRef.current = null;
+    }
+    if (digitalLiveGainRef.current) {
+      try {
+        digitalLiveGainRef.current.disconnect();
+      } catch (e) {}
+      digitalLiveGainRef.current = null;
+    }
+    if (digitalLiveAudioContextRef.current && digitalLiveAudioContextRef.current.state !== "closed") {
+      digitalLiveAudioContextRef.current.close();
+      digitalLiveAudioContextRef.current = null;
+    }
+    digitalLiveSamplesRef.current = [];
+    liveChunkInFlightRef.current = false;
+    setIsDigitalLiveTranscribing(false);
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -369,6 +417,188 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     render();
   };
 
+  const readBlobAsDataURL = (blob: Blob) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error || new Error("No se pudo leer el audio."));
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const looksLikeHallucinatedTranscript = (text: string) => {
+    const normalized = text.toLowerCase();
+    const suspiciousPhrases = [
+      "scrum",
+      "unidad de programacion",
+      "base de datos para el formulario",
+      "buenos dias a todos",
+      "speaker 1",
+      "speaker 2",
+      "profesor:",
+      "estudiante:",
+    ];
+    if (suspiciousPhrases.some((phrase) => normalized.includes(phrase))) return true;
+    if (liveTranscriptRef.current && liveTranscriptRef.current.includes(text)) return true;
+    return false;
+  };
+
+  const mergeFloat32Samples = (chunks: Float32Array[]) => {
+    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const merged = new Float32Array(totalLength);
+    let offset = 0;
+    chunks.forEach((chunk) => {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    });
+    return merged;
+  };
+
+  const downsampleBuffer = (buffer: Float32Array, inputRate: number, outputRate: number) => {
+    if (inputRate === outputRate) return buffer;
+    const ratio = inputRate / outputRate;
+    const newLength = Math.round(buffer.length / ratio);
+    const result = new Float32Array(newLength);
+    let offsetBuffer = 0;
+    for (let i = 0; i < result.length; i++) {
+      const nextOffsetBuffer = Math.round((i + 1) * ratio);
+      let accum = 0;
+      let count = 0;
+      for (let j = offsetBuffer; j < nextOffsetBuffer && j < buffer.length; j++) {
+        accum += buffer[j];
+        count++;
+      }
+      result[i] = count > 0 ? accum / count : 0;
+      offsetBuffer = nextOffsetBuffer;
+    }
+    return result;
+  };
+
+  const encodeWav = (samples: Float32Array, sampleRate: number) => {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeString = (offset: number, value: string) => {
+      for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+    };
+
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, "data");
+    view.setUint32(40, samples.length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      const sample = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    }
+    return new Blob([view], { type: "audio/wav" });
+  };
+
+  const processDigitalLiveBlob = async (chunkBlob: Blob) => {
+    if (
+      captureSourceRef.current !== "screen" ||
+      !isRecordingRef.current ||
+      isPausedRef.current ||
+      liveChunkInFlightRef.current
+    ) {
+      return;
+    }
+
+    if (chunkBlob.size < 8000) return;
+
+    liveChunkInFlightRef.current = true;
+    setIsDigitalLiveTranscribing(true);
+
+    try {
+      const base64Data = await readBlobAsDataURL(chunkBlob);
+      const response = await fetch("/api/transcribe-live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audio: base64Data,
+          mimeType: chunkBlob.type || "audio/wav",
+          apiKey: settings.apiKey,
+        }),
+      });
+
+      const rawText = await response.text();
+      if (!response.ok) {
+        throw new Error(rawText.substring(0, 180));
+      }
+
+      const json = JSON.parse(rawText);
+      const chunkTranscript = (json.transcript || "").trim();
+      if (!json.hasSpeech || !chunkTranscript || looksLikeHallucinatedTranscript(chunkTranscript)) return;
+
+      const nextTranscript = `${liveTranscriptRef.current}${liveTranscriptRef.current ? "\n" : ""}${chunkTranscript}`.trim();
+      liveTranscriptRef.current = nextTranscript;
+      sessionFinalTranscriptRef.current = nextTranscript;
+      setSpeechErrorNotice(null);
+      setLiveTranscript(nextTranscript);
+      setInterimTranscript("");
+
+      const wordCount = nextTranscript.trim().split(/\s+/).filter(Boolean).length;
+      setDraftWordCount(wordCount);
+    } catch (err) {
+      console.warn("Digital live transcription chunk failed:", err);
+      setSpeechErrorNotice(
+        "La captura digital sigue activa, pero la transcripción en vivo por IA no pudo actualizar este segmento. Al terminar se procesará el audio completo."
+      );
+    } finally {
+      liveChunkInFlightRef.current = false;
+      setIsDigitalLiveTranscribing(false);
+    }
+  };
+
+  const flushDigitalLiveSamples = async () => {
+    if (!digitalLiveAudioContextRef.current || digitalLiveSamplesRef.current.length === 0) return;
+    const chunks = digitalLiveSamplesRef.current.splice(0);
+    const merged = mergeFloat32Samples(chunks);
+    if (merged.length < digitalLiveAudioContextRef.current.sampleRate * 2) return;
+    const downsampled = downsampleBuffer(merged, digitalLiveAudioContextRef.current.sampleRate, 16000);
+    await processDigitalLiveBlob(encodeWav(downsampled, 16000));
+  };
+
+  const startDigitalLiveTranscription = (stream: MediaStream) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioCtx();
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      const gain = audioContext.createGain();
+      gain.gain.value = 0;
+
+      processor.onaudioprocess = (event) => {
+        if (!isRecordingRef.current || isPausedRef.current || captureSourceRef.current !== "screen") return;
+        digitalLiveSamplesRef.current.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+      };
+
+      source.connect(processor);
+      processor.connect(gain);
+      gain.connect(audioContext.destination);
+
+      digitalLiveAudioContextRef.current = audioContext;
+      digitalLiveSourceRef.current = source;
+      digitalLiveProcessorRef.current = processor;
+      digitalLiveGainRef.current = gain;
+      liveChunkTimerRef.current = setInterval(() => {
+        flushDigitalLiveSamples();
+      }, 8000);
+    } catch (err) {
+      console.warn("Digital PCM live transcription setup failed:", err);
+      setSpeechErrorNotice("No se pudo preparar la transcripcion digital en vivo. La grabacion final seguira disponible al terminar.");
+    }
+  };
+
   // 2. Control Handlers for Live Voice Recording
   const startRecording = async () => {
     // Clean up any existing records, streams or timers to avoid leaks and duplicate sharing banners
@@ -385,6 +615,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     setDraftWordCount(0);
     setFailedSessionData(null);
     audioChunksRef.current = [];
+    digitalLiveSamplesRef.current = [];
+    liveChunkInFlightRef.current = false;
+    setIsDigitalLiveTranscribing(false);
 
     // Initialize the live draft session
     const draftId = "draft_" + Date.now();
@@ -490,13 +723,17 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(250); // Fetch packets in 250ms chunks
+      mediaRecorder.start(250);
 
       isRecordingRef.current = true;
       isPausedRef.current = false;
       setIsRecording(true);
       setIsPaused(false);
       startVisualizer(stream);
+
+      if (captureSource === "screen") {
+        startDigitalLiveTranscription(stream);
+      }
 
       // Web Speech API for Real-time Live Transcription (only for microphone source)
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -567,7 +804,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         } catch (e) {
           console.error("Speech recognition start failed:", e);
         }
-      } else {
+      } else if (captureSource === "mic") {
         setSpeechErrorNotice(
           "⚠️ Tu navegador no tiene soporte nativo para el reconocimiento de voz en vivo (Web Speech API). Te recomendamos usar Google Chrome o Microsoft Edge."
         );
@@ -1292,8 +1529,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                 {/* Dual Pane Grid Layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch w-full">
                   
-                  {/* LEFT COLUMN: LIVE TRANSCRIPTION (col-span-12 or lg:col-span-6) */}
-                  <div className="lg:col-span-6 flex flex-col items-stretch bg-slate-50/30 border border-slate-100 rounded-3xl p-5 relative">
+                  {/* LEFT COLUMN: LIVE TRANSCRIPTION */}
+                  <div className="lg:col-span-8 flex flex-col items-stretch bg-slate-50/30 border border-slate-100 rounded-3xl p-5 relative">
                     
                     {/* Header Row */}
                     <div className="flex flex-wrap items-center justify-between w-full px-4 py-2 bg-white/80 backdrop-blur-md border border-slate-100 rounded-2xl mb-4 gap-2 shadow-3xs">
@@ -1364,11 +1601,19 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                   <span className="flex-1">{speechErrorNotice}</span>
                                 </div>
                               )}
-                              {captureSource === "screen" ? (
+                              {captureSource === "screen" && liveTranscript ? (
+                                <div className="space-y-2 bg-transparent pr-1">
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[9.5px] font-bold text-emerald-700 uppercase tracking-wider mb-2">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isDigitalLiveTranscribing ? "bg-emerald-500 animate-pulse" : "bg-emerald-400"}`} />
+                                    <span>{isDigitalLiveTranscribing ? "Actualizando transcripciÃ³n digital..." : "TranscripciÃ³n digital en vivo"}</span>
+                                  </div>
+                                  <div className="text-slate-800 font-normal whitespace-pre-wrap">{liveTranscript}</div>
+                                </div>
+                              ) : captureSource === "screen" ? (
                                 <div className="text-slate-500 text-left py-12 flex flex-col items-center justify-center space-y-3 mt-4 px-4">
                                   <span className="text-3xl animate-pulse">💻🔊</span>
                                   <span className="text-xs font-bold text-[#2C5EAD] uppercase tracking-wider">
-                                    Capturando Audio Digital
+                                    {isDigitalLiveTranscribing ? "Transcribiendo Audio Digital" : "Capturando Audio Digital"}
                                   </span>
                                   <span className="text-[11px] font-medium text-slate-400 text-center leading-relaxed">
                                     Grabación de audio de pestaña/pantalla activa en segundo plano. La transcripción completa y el resumen se generarán con Gemini AI al hacer clic en <strong>"Terminar y Procesar"</strong>.
@@ -1422,7 +1667,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                       <button
                         onClick={pauseRecording}
                         className="p-2 bg-white hover:bg-slate-50 rounded-full border border-slate-200 text-slate-600 hover:text-slate-800 transition-all cursor-pointer shadow-3xs active:scale-95"
-                        title={isPaused ? "Reanudar Sesión" : "Pausar Sesión"}
+                        title={isPaused ? "Reanudar Sesión" : "OFF Sesión"}
                       >
                         {isPaused ? <Play className="w-4 h-4 text-emerald-500 fill-emerald-500" /> : <Pause className="w-4 h-4" />}
                       </button>
@@ -1437,8 +1682,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
                   </div>
 
-                  {/* RIGHT COLUMN: INTERACTIVE AI Q&A COMPANION (col-span-12 or lg:col-span-6) */}
-                  <div className="lg:col-span-6 flex flex-col items-stretch bg-slate-50 border border-slate-200/60 rounded-3xl p-5 relative min-h-[680px]">
+                  {/* RIGHT COLUMN: PROFESSOR QUESTION COPILOT */}
+                  <div className="lg:col-span-4 flex flex-col items-stretch bg-slate-50 border border-slate-200/60 rounded-3xl p-4 relative min-h-[520px]">
                     {!isCopilotActive ? (
                       <>
                         {/* Header */}
@@ -1446,27 +1691,27 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                           <div className="flex items-center space-x-2">
                             <GraduationCap className="w-4 h-4 text-slate-450" />
                             <div>
-                              <span className="text-xs font-bold text-slate-500 block leading-tight">Copiloto de Clase AI</span>
-                              <span className="text-[9px] text-slate-400 font-bold tracking-wide uppercase">Modo Ahorro</span>
+                              <span className="text-xs font-bold text-slate-500 block leading-tight">Copiloto de Preguntas</span>
+                              <span className="text-[9px] text-slate-400 font-bold tracking-wide uppercase">OFF</span>
                             </div>
                           </div>
                           <span className="text-[9.5px] bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-md font-bold text-emerald-650">
-                            Ahorro de API Activo
+                            Inactivo
                           </span>
                         </div>
 
                         {/* Ahorro Body */}
-                        <div className="flex-grow flex flex-col items-center justify-center text-center p-6 my-auto">
-                          <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100/60 flex items-center justify-center text-indigo-550 mb-5 shadow-xs relative overflow-hidden animate-[pulse_4s_infinite]">
-                            <Cpu className="w-7 h-7 text-[#135bf1] relative z-10" />
+                        <div className="flex flex-col items-center justify-center text-center p-4 my-auto">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100/60 flex items-center justify-center text-indigo-550 mb-5 shadow-xs relative overflow-hidden ">
+                            <Cpu className="w-6 h-6 text-[#135bf1] relative z-10" />
                             <div className="absolute inset-0 bg-gradient-to-tr from-[#135bf1]/10 to-transparent pointer-events-none" />
                           </div>
-                          <h4 className="text-sm font-bold text-slate-800 tracking-tight">Copiloto en Modo Ahorro</h4>
+                          <h4 className="text-sm font-bold text-slate-800 tracking-tight">Copiloto en OFF</h4>
                           <p className="text-xs text-slate-500 leading-relaxed mt-2.5 max-w-xs">
-                            El asistente inteligente en tiempo real está inactivo por defecto para **evitar el consumo y llamadas innecesarias a tu API de Gemini**.
+                            Activalo solo cuando el profesor haga preguntas y necesites una respuesta rapida.
                           </p>
                           <p className="text-[11px] text-slate-400 mt-1.5 max-w-xs">
-                            Actívalo para identificar dudas del docente, formular preguntas y chatear directamente con la clase grabada.
+                            Si no hay transcripcion real, escribe manualmente la pregunta que te hicieron.
                           </p>
                           <button
                             type="button"
@@ -1474,7 +1719,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                             className="mt-6 px-5 py-2.5 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-xl font-bold text-[10.5px] uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2"
                           >
                             <Sparkles className="w-3.5 h-3.5 text-yellow-305 animate-pulse" />
-                            <span>Activar Asistente Copiloto</span>
+                            <span>Activar ON</span>
                           </button>
                         </div>
                       </>
@@ -1485,8 +1730,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                           <div className="flex items-center space-x-2">
                             <GraduationCap className="w-4 h-4 text-[#135bf1]" />
                             <div>
-                              <span className="text-xs font-bold text-[#111111] block leading-tight">Copiloto de Clase AI</span>
-                              <span className="text-[9px] text-[#135bf1] font-bold tracking-wide uppercase">Asistente en Tiempo Real</span>
+                              <span className="text-xs font-bold text-[#111111] block leading-tight">Copiloto de Preguntas</span>
+                              <span className="text-[9px] text-[#135bf1] font-bold tracking-wide uppercase">ON</span>
                             </div>
                           </div>
                           
@@ -1496,7 +1741,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                               onClick={() => setIsCopilotActive(false)}
                               className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[9px] font-bold text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
                             >
-                              Pausar
+                              OFF
                             </button>
                             <button
                               type="button"
@@ -1516,7 +1761,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                               ) : (
                                 <>
                                   <Search className="w-2.5 h-2.5 text-[#135bf1]" />
-                                  <span>Identificar Dudas</span>
+                                  <span>Detectar</span>
                                 </>
                               )}
                             </button>
@@ -1527,12 +1772,12 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                         <div className="mb-4 bg-white/70 border border-slate-200/45 p-3 rounded-xl">
                           <p className="text-[9px] font-bold text-slate-550 uppercase tracking-widest mb-2 flex items-center space-x-1">
                             <Sparkles className="w-2.5 h-2.5 text-[#135bf1] animate-pulse" />
-                            <span>Preguntas & Dudas Detectadas del Docente:</span>
+                            <span>Preguntas del profesor</span>
                           </p>
                           
                           {detectedQuestions.length === 0 ? (
                             <p className="text-[10px] text-slate-400 italic">
-                              Ninguna duda detectada aún. El sistema analizará la acústica del profesor de forma continua, o presiona "Identificar Dudas" arriba.
+                              Aun no hay texto suficiente para consultar. Puedes escribir manualmente la pregunta que te hizo el profesor.
                             </p>
                           ) : (
                             <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto pr-1">
@@ -1542,7 +1787,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                   type="button"
                                   onClick={() => {
                                     const cleanQ = q.replace(/^Pregunta\/Dato:\s*"/, "").replace(/"$/, "");
-                                    handleSendLiveChat(`Responde a esta pregunta formulada en clase: "${cleanQ}"`);
+                                    handleSendLiveChat(`Responde de forma breve y clara esta pregunta del profesor: "${cleanQ}"`);
                                   }}
                                   className="inline-flex items-center space-x-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100/50 hover:border-indigo-200/80 rounded-lg text-[9.5px] font-medium text-indigo-700 text-left transition-all cursor-pointer active:scale-95"
                                 >
@@ -1558,7 +1803,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                         <div 
                           ref={chatScrollRef}
                           className="flex-1 overflow-y-auto space-y-3 pr-1 py-1 mb-4 border-b border-slate-200/50 flex flex-col justify-start"
-                          style={{ height: "440px", maxHeight: "440px" }}
+                          style={{ height: "300px", maxHeight: "300px" }}
                         >
                           {chatMessages.map((msg, i) => (
                             <div
@@ -1599,7 +1844,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                   <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                                   <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                                   <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                                  <span className="text-[10px] text-slate-400 font-bold ml-1">Buscando en la transcripción en vivo...</span>
+                                  <span className="text-[10px] text-slate-400 font-bold ml-1">Preparando respuesta...</span>
                                 </div>
                               </div>
                             </div>
@@ -1610,17 +1855,27 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                         <div className="flex items-center space-x-1.5 mb-2 overflow-x-auto py-1 scroll-smooth">
                           <button
                             type="button"
-                            onClick={() => handleSendLiveChat("Explícame resumidamente el último tema expuesto con ejemplos sencillos.")}
+                            onClick={() => {
+                              const question = detectedQuestions[0];
+                              handleSendLiveChat(question ? `Responde de forma breve y clara esta pregunta del profesor: "${question}"` : "Aun no hay una pregunta detectada. Cuando el profesor pregunte algo, escribela aqui para responderla.");
+                            }}
                             className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
                           >
-                            💡 Explicar último concepto
+                            Responder
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleSendLiveChat("¿Cuáles son las ideas clave o tareas importantes que se han mencionado explícitamente?")}
+                            onClick={() => handleSendLiveChat("Explicame brevemente la pregunta o concepto que acaba de mencionar el profesor, sin hacer resumen de toda la clase.")}
                             className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
                           >
-                            📝 Tareas mencionadas
+                            Explicar breve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSendLiveChat("Dame un ejemplo corto para responder mejor esta pregunta del profesor.")}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[9.5px] text-slate-600 transition-all font-semibold shrink-0 cursor-pointer active:scale-95"
+                          >
+                            Dar ejemplo
                           </button>
                         </div>
 
@@ -1636,7 +1891,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                             type="text"
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
-                            placeholder="Pregúntale al copiloto sobre la clase en vivo..."
+                            placeholder="Escribe la pregunta que te hizo el profesor..."
                             disabled={isChatSending}
                             className="flex-grow bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#135bf1] transition-all disabled:opacity-50"
                           />

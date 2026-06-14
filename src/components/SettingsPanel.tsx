@@ -334,7 +334,7 @@ export default function SettingsPanel({
                   <Lock className="w-4 h-4 text-[#135bf1] shrink-0 mt-0.5" />
                   <div>
                     <span className="font-bold text-indigo-950">Privacidad Incorporada: </span>
-                    Tu <code className="bg-slate-200/50 px-1 rounded font-mono text-[#135bf1] text-[9.5px]">API_KEY</code> se guarda en un documento aislado de Firestore vinculado exclusivamente a tu UID de usuario de Google. Ninguna otra persona en la plataforma puede verla, procesar minutas con ella ni compartirla.
+                    Tu <code className="bg-slate-200/50 px-1 rounded font-mono text-[#135bf1] text-[9.5px]">API_KEY</code> se guarda localmente en SQLite dentro de este equipo y queda vinculada a tu usuario local. No se sincroniza con Firebase, Google ni Vercel.
                   </div>
                 </div>
               </div>
@@ -413,9 +413,9 @@ export default function SettingsPanel({
                       Al proceder con esta acción, nuestro sistema ejecutará una limpieza de nivel corporativo para proteger tu privacidad:
                     </p>
                     <ul className="list-disc pl-4 mt-2 space-y-1 text-[10px] text-slate-450 text-left font-medium">
-                      <li>Se purgarán todas tus transcripciones e historiales guardados en Firebase Firestore.</li>
-                      <li>Se eliminará tu clave <code className="bg-slate-205 py-0.5 px-1 rounded font-mono">API_KEY</code> de los registros en la nube correspondientes.</li>
-                      <li>Se limpiarán las cookies, IndexedDB local y datos temporales indexados por tu ID de Google.</li>
+                      <li>Se purgarán todas tus transcripciones e historiales guardados en SQLite local.</li>
+                      <li>Se eliminará tu clave <code className="bg-slate-205 py-0.5 px-1 rounded font-mono">API_KEY</code> de la base local.</li>
+                      <li>Se limpiará la sesión local, reuniones, configuración y códigos de recuperación.</li>
                       <li>La acción es instantánea, definitiva y no tiene marcha atrás.</li>
                     </ul>
 
