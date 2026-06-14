@@ -92,6 +92,7 @@ export default function App() {
 
   // Active workspace page
   const [activeTab, setActiveTab] = useState<"dashboard" | "recorder" | "meetings" | "settings" | "integrations">("dashboard");
+  const [preselectedRecorderMode, setPreselectedRecorderMode] = useState<"record" | "upload">("record");
 
   // Meetings and Settings state
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -106,6 +107,7 @@ export default function App() {
 
   // Track onboarding skip status and logins/visit count
   const [onboardingSkipped, setOnboardingSkipped] = useState<boolean>(false);
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState<boolean>(false);
   const [visitCount, setVisitCount] = useState<number>(1);
 
   // Mobile menu control toggler
@@ -127,6 +129,9 @@ export default function App() {
       const isSkipped = localStorage.getItem(`onboarding_skipped_v1_${parsedUser.uid}`) === "true";
       setOnboardingSkipped(isSkipped);
       setVisitCount(savedVisits);
+
+      const isNewUserRegistered = localStorage.getItem(`onboarding_new_user_v1_${parsedUser.uid}`) === "true";
+      setIsFirstTimeUser(isNewUserRegistered);
     }
   }, []);
 
@@ -218,9 +223,18 @@ export default function App() {
     loadData();
   }, [user]);
 
-  const handleLoginSuccess = (authenticatedUser: User) => {
+  const handleLoginSuccess = (authenticatedUser: User, isNewUser?: boolean) => {
     setUser(authenticatedUser);
     localStorage.setItem("mb_user", JSON.stringify(authenticatedUser));
+    
+    if (isNewUser) {
+      setIsFirstTimeUser(true);
+      localStorage.setItem(`onboarding_new_user_v1_${authenticatedUser.uid}`, "true");
+    } else {
+      setIsFirstTimeUser(false);
+      localStorage.removeItem(`onboarding_new_user_v1_${authenticatedUser.uid}`);
+    }
+
     setActiveTab("dashboard");
   };
 
@@ -447,20 +461,24 @@ export default function App() {
     return <LoginRegister onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Enforce onboarding / first setup if user has no API Key configured and has not skipped
-  if ((!settings.apiKey || settings.apiKey.trim() === "") && !onboardingSkipped) {
+  // Enforce onboarding / first setup if user has no API Key configured and has not skipped, and is a first-time user
+  if ((!settings.apiKey || settings.apiKey.trim() === "") && !onboardingSkipped && isFirstTimeUser) {
     return (
       <OnboardingScreen
         user={user}
         showSkip={true}
         onSkip={() => {
           setOnboardingSkipped(true);
+          setIsFirstTimeUser(false);
+          localStorage.removeItem(`onboarding_new_user_v1_${user.uid}`);
           localStorage.setItem(`onboarding_skipped_v1_${user.uid}`, "true");
         }}
         onSaveApiKey={async (key) => {
           const updatedSettings = { ...settings, apiKey: key };
           setSettings(updatedSettings);
           await saveUserSettingsToCloud(user.uid, updatedSettings);
+          setIsFirstTimeUser(false);
+          localStorage.removeItem(`onboarding_new_user_v1_${user.uid}`);
         }}
         onLogout={handleLogout}
       />
@@ -576,6 +594,7 @@ export default function App() {
                   }}
                   setActiveTab={setActiveTab}
                   onToggleFavorite={handleToggleFavorite}
+                  setRecorderMode={setPreselectedRecorderMode}
                 />
               )}
 
@@ -591,6 +610,7 @@ export default function App() {
                     onTranscriptionSuccess={handleAddNewMeeting}
                     settings={settings}
                     onUpdateDraft={handleUpdateMeetingDraft}
+                    initialMode={preselectedRecorderMode}
                   />
                 </div>
               )}

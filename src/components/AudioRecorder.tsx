@@ -12,11 +12,18 @@ interface AudioRecorderProps {
   onTranscriptionSuccess: (transcription: { id?: string; title: string; transcript: string; summary: string }, durationSec: number) => void;
   settings: { aiProvider: string; apiKey: string; bypassSizeLimit?: boolean };
   onUpdateDraft?: (draft: { id: string; title: string; transcript: string; summary: string; duration: string; isDraft?: boolean; date?: string }) => void;
+  initialMode?: "record" | "upload";
 }
 
-export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpdateDraft }: AudioRecorderProps) {
+export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpdateDraft, initialMode }: AudioRecorderProps) {
   // Tabs: "record" or "upload"
-  const [activeMode, setActiveMode] = useState<"record" | "upload">("record");
+  const [activeMode, setActiveMode] = useState<"record" | "upload">(initialMode || "record");
+
+  useEffect(() => {
+    if (initialMode) {
+      setActiveMode(initialMode);
+    }
+  }, [initialMode]);
 
   // Recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -423,6 +430,15 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
             }
           }
           
+          // Stop video tracks immediately to prevent black screen / high CPU bugs since we only need the audio
+          displayStream.getVideoTracks().forEach((track) => {
+            try {
+              track.stop();
+            } catch (e) {
+              console.warn("Failed to stop video track:", e);
+            }
+          });
+
           // Escuchar cuando el usuario hace clic en el botón nativo de "Dejar de compartir" del navegador para finalizar grabación limpiamente
           audioTracks.forEach((track) => {
             track.onended = () => {

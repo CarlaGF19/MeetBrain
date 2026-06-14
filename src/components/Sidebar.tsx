@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from "react";
+import React, { useState } from "react";
 import { User, Meeting } from "../types";
 import {
   Home,
@@ -44,6 +44,33 @@ export default function Sidebar({
 }: SidebarProps) {
   const displayName = user.displayName || "Carla Acha";
   const userEmail = user.email || "carlita.ai19.20@gmail.com";
+
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [hasUnread, setHasUnread] = useState(true);
+
+  const mockNotifications = [
+    {
+      id: "1",
+      title: "API Key de Gemini Activa",
+      description: "Tu integración con Google GenAI está lista y configurada.",
+      time: "Hace 5 min",
+      unread: true
+    },
+    {
+      id: "2",
+      title: "Borrador de Clase Guardado",
+      description: "Se guardó una copia de seguridad local de tu última sesión.",
+      time: "Hace 2 horas",
+      unread: true
+    },
+    {
+      id: "3",
+      title: "Bienvenido a MeetBrain",
+      description: "Comienza a grabar para transcribir y resumir tus clases con IA.",
+      time: "Ayer",
+      unread: false
+    }
+  ];
 
   const navItems = [
     {
@@ -88,34 +115,101 @@ export default function Sidebar({
         {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
       </button>
 
+      {/* Floating Notifications Dropdown */}
+      {showNotifications && (
+        <>
+          <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setShowNotifications(false)} />
+          <div 
+            className={`absolute bg-white/95 backdrop-blur-md border border-[#EBEBEB] rounded-2xl shadow-xl z-50 flex flex-col ${
+              isCollapsed 
+                ? "left-[76px] top-12 w-[300px]" 
+                : "right-4 top-16 w-[320px]"
+            }`}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-3.5 border-b border-[#EBEBEB] bg-slate-50/50 rounded-t-2xl">
+              <span className="text-xs font-bold text-[#111111] uppercase tracking-wider">Notificaciones</span>
+              <button 
+                onClick={() => setShowNotifications(false)}
+                className="text-[10px] text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100 py-1">
+              {mockNotifications.map((notif) => (
+                <div key={notif.id} className="p-3 text-left hover:bg-slate-50 transition-colors">
+                  <div className="flex items-start justify-between gap-1.5">
+                    <p className="text-xs font-bold text-[#111111] leading-snug">{notif.title}</p>
+                    {notif.unread && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#FF4D4F] mt-1 shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-[10px] text-[#666666] mt-0.5 leading-normal">{notif.description}</p>
+                  <p className="text-[9px] text-slate-400 mt-1">{notif.time}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="flex flex-col flex-grow overflow-y-auto">
         
         {/* Brand Header */}
-        <div className={`py-4 pb-2 flex items-center ${isCollapsed ? "justify-center px-2" : "justify-between px-5"}`}>
-          {!isCollapsed ? (
-            <>
-              <div className="flex items-center gap-1.5 cursor-pointer">
-                <div className="flex items-center justify-center gap-0.5">
-                  <span className="w-2.5 h-6 rounded-full bg-[#135bf1]" />
-                  <span className="w-2.5 h-4 rounded-full bg-[#135bf1]/60" />
-                  <span className="w-2.5 h-5 rounded-full bg-[#135bf1]/80" />
+        <div className={`py-4 pb-2 flex flex-col items-center gap-3 ${isCollapsed ? "px-2" : "px-5"}`}>
+          <div className="w-full flex items-center justify-between">
+            {/* Logo */}
+            <div className="flex items-center gap-1.5 cursor-pointer">
+              {isCollapsed ? (
+                <div className="flex items-center justify-center gap-0.5 cursor-pointer py-1.5">
+                  <span className="w-2 h-5 rounded-full bg-[#135bf1]" />
+                  <span className="w-2 h-3.5 rounded-full bg-[#135bf1]/60" />
+                  <span className="w-2 h-4.5 rounded-full bg-[#135bf1]/80" />
                 </div>
-                <span className="font-bold text-[22px] tracking-tight text-[#111111] font-sans flex items-center ml-0.5 select-none">
-                  olli<span className="text-[#135bf1] ml-[1px]">.</span>
-                </span>
-              </div>
-              
-              <button className="p-1.5 hover:bg-slate-55 rounded-full text-[#333333] hover:bg-[#F4F4F5] transition-colors relative">
-                <Bell className="w-5 h-5 text-slate-700" />
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#FF4D4F]" />
-              </button>
-            </>
-          ) : (
-            <div className="flex items-center justify-center gap-0.5 cursor-pointer py-1.5">
-              <span className="w-2 h-5 rounded-full bg-[#135bf1]" />
-              <span className="w-2 h-3.5 rounded-full bg-[#135bf1]/60" />
-              <span className="w-2 h-4.5 rounded-full bg-[#135bf1]/80" />
+              ) : (
+                <>
+                  <div className="flex items-center justify-center gap-0.5">
+                    <span className="w-2.5 h-6 rounded-full bg-[#135bf1]" />
+                    <span className="w-2.5 h-4 rounded-full bg-[#135bf1]/60" />
+                    <span className="w-2.5 h-5 rounded-full bg-[#135bf1]/80" />
+                  </div>
+                  <span className="font-bold text-[22px] tracking-tight text-[#111111] font-sans flex items-center ml-0.5 select-none">
+                    olli<span className="text-[#135bf1] ml-[1px]">.</span>
+                  </span>
+                </>
+              )}
             </div>
+
+            {/* Bell Button (Only when expanded) */}
+            {!isCollapsed && (
+              <button 
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  setHasUnread(false);
+                }}
+                className="p-1.5 hover:bg-[#F4F4F5] rounded-full text-[#333333] transition-colors relative cursor-pointer"
+              >
+                <Bell className="w-5 h-5 text-slate-700" />
+                {hasUnread && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#FF4D4F]" />}
+              </button>
+            )}
+          </div>
+
+          {/* Bell Button (Only when collapsed, placed below logo) */}
+          {isCollapsed && (
+            <button 
+              onClick={() => {
+                setShowNotifications(!showNotifications);
+                setHasUnread(false);
+              }}
+              className="p-1.5 hover:bg-[#F4F4F5] rounded-full text-[#333333] transition-colors relative cursor-pointer"
+            >
+              <Bell className="w-5 h-5 text-slate-700" />
+              {hasUnread && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[#FF4D4F]" />}
+            </button>
           )}
         </div>
 

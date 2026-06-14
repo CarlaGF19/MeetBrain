@@ -7,7 +7,7 @@ import React, { useState } from "react";
 import { User } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { auth } from "../lib/firebase";
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { signInWithPopup, GoogleAuthProvider, getAdditionalUserInfo } from "firebase/auth";
 import { 
   Sparkles, 
   AlertCircle, 
@@ -66,7 +66,7 @@ function TiltCard({ children, className, style }: TiltCardProps) {
 }
 
 interface LoginRegisterProps {
-  onLoginSuccess: (user: User) => void;
+  onLoginSuccess: (user: User, isNewUser?: boolean) => void;
 }
 
 export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
@@ -85,12 +85,15 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
       const result = await signInWithPopup(auth, provider);
       const firebaseUser = result.user;
       
+      const additionalInfo = getAdditionalUserInfo(result);
+      const isNewUser = additionalInfo?.isNewUser ?? false;
+      
       onLoginSuccess({
         uid: firebaseUser.uid,
         email: firebaseUser.email || "username45usario@gmail.com",
         displayName: firebaseUser.displayName || "Usuario Olli",
         photoURL: firebaseUser.photoURL || undefined,
-      });
+      }, isNewUser);
     } catch (err: any) {
       console.error("Firebase Google Auth failed:", err);
       
