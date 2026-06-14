@@ -65,7 +65,6 @@ export default function MeetingViewer({
   onUpdateMeeting,
 }: MeetingViewerProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"summary" | "transcript">("summary");
   const [copied, setCopiado] = useState(false);
   const [filterFavorites, setFilterFavorites] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -88,7 +87,10 @@ export default function MeetingViewer({
 
 
   // Otter.ai Double-Pane AI Chat assistant state
-  const [isChatPanelOpen, setIsChatPanelOpen] = useState(true);
+  const [isChatPanelOpen, setIsChatPanelOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth >= 1600;
+  });
   const [chatTab, setChatTab] = useState<"chat" | "outline" | "comments">("chat");
   const [userChatMessage, setUserChatMessage] = useState("");
   const [isGeneratingChat, setIsGeneratingChat] = useState(false);
@@ -103,11 +105,11 @@ export default function MeetingViewer({
     const lower = raw.toLowerCase();
 
     if (raw.includes("429") || lower.includes("quota") || lower.includes("resource_exhausted")) {
-      return "Gemini alcanzó el límite de cuota de tu API key. Espera a que se renueve o conecta otra clave.";
+      return "Gemini alcanzo el limite de cuota de tu API key. Espera a que se renueve o conecta otra clave.";
     }
 
     if (raw.includes("401") || raw.includes("403") || lower.includes("api key") || lower.includes("permission")) {
-      return "Conecta una API key válida en Settings para activar respuestas inteligentes.";
+      return "Conecta una API key valida en Settings para activar respuestas inteligentes.";
     }
 
     return raw.length > 180 ? `${raw.slice(0, 180)}...` : raw;
@@ -119,9 +121,9 @@ export default function MeetingViewer({
       // Set initial welcoming message from Olli
       const welcomeMsg: ChatMessage = {
         role: "model",
-        content: `Hola. Soy **Olli**, tu asistente inteligente. Ya tengo cargada la sesi?n **"${selectedMeeting.title}"** en tiempo real. 
+        content: `Hola. Soy **Olli**, tu asistente inteligente. Ya tengo cargada la sesion **"${selectedMeeting.title}"** en tiempo real. 
 
-Puedes pedirme decisiones, tareas, resumen ejecutivo o preguntas sobre la transcripci?n.`,
+Puedes pedirme decisiones, tareas, resumen ejecutivo o preguntas sobre la transcripcion.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setConversations(prev => ({
@@ -178,7 +180,6 @@ Puedes pedirme decisiones, tareas, resumen ejecutivo o preguntas sobre la transc
         isDraft: false
       });
 
-      setActiveTab("summary");
     } catch (err: any) {
       console.error("Text Resumen Error:", err);
       setSummarizationError(err.message || "Fallo inesperado al resumir el borrador de texto.");
@@ -238,7 +239,7 @@ Duration: ${meeting.duration}
 ## AI Resumen & Actions
 ${meeting.summary}
 
-## Verbatim Transcripci?n
+## Verbatim Transcripcion
 ${meeting.transcript}
 `;
     const cleanName = meeting.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -416,7 +417,7 @@ ${meeting.transcript}
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: recipientEmail,
-          subject: emailSubject || `Acta de reuni?n: ${selectedMeeting.title}`,
+          subject: emailSubject || `Acta de reunion: ${selectedMeeting.title}`,
           body: emailNote,
           pdfBase64: pdfBase64DataUri,
           pdfFilename,
@@ -616,10 +617,10 @@ ${meeting.transcript}
   };
 
   return (
-    <div className="flex h-[calc(100vh-112px)] gap-4 select-none font-sans relative overflow-hidden">
+    <div className="flex h-[calc(100vh-96px)] gap-3 select-none font-sans relative overflow-hidden">
       
       {/* 1. Left Vault Explorer List */}
-      <div id="vault_explorer" className="w-[300px] bg-white border border-[#E9E9EB] rounded-2xl flex flex-col overflow-hidden shrink-0 max-lg:hidden shadow-sm">
+      <div id="vault_explorer" className="w-[260px] bg-white border border-[#E9E9EB] rounded-2xl flex flex-col overflow-hidden shrink-0 max-lg:hidden shadow-sm">
         
         {/* Explorer header info */}
         <div className="p-4 border-b border-[#E9E9EB] bg-white/40 space-y-3">
@@ -860,45 +861,22 @@ ${meeting.transcript}
                 </div>
               )}
 
-              {/* Document body navigation selector */}
-              <div className="px-6 py-3 border-b border-[#F2F2F2] flex items-center justify-between bg-white">
-                <div className="flex space-x-1.5 p-1 bg-slate-100 rounded-xl">
-                  <button
-                    onClick={() => setActiveTab("summary")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-                      activeTab === "summary"
-                        ? "bg-white text-[#135bf1] shadow-sm"
-                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>Resumen</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("transcript")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-                      activeTab === "transcript"
-                        ? "bg-white text-[#135bf1] shadow-sm"
-                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Transcripción</span>
-                  </button>
-                </div>
-
-                {/* Copy options & AI Assistant Toggle */}
+              {/* Document quick actions */}
+              <div className="px-6 py-2 border-b border-[#F2F2F2] flex items-center justify-end bg-white">
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() =>
-                      handleCopyClipboard(
-                        activeTab === "summary" ? selectedMeeting.summary : selectedMeeting.transcript
-                      )
-                    }
+                    onClick={() => handleCopyClipboard(selectedMeeting.summary)}
                     className="px-2.5 py-1.5 bg-slate-55 hover:bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 flex items-center space-x-1.5 transition-colors cursor-pointer border border-[#E9E9EB]"
                   >
                     {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    <span>{copied ? "Copiado" : "Copiar"}</span>
+                    <span>{copied ? "Copiado" : "Copiar resumen"}</span>
+                  </button>
+                  <button
+                    onClick={() => handleCopyClipboard(selectedMeeting.transcript)}
+                    className="px-2.5 py-1.5 bg-slate-55 hover:bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 flex items-center space-x-1.5 transition-colors cursor-pointer border border-[#E9E9EB]"
+                  >
+                    <FileText className="w-3 h-3" />
+                    <span>Copiar transcripcion</span>
                   </button>
                   <button
                     onClick={() => setIsChatPanelOpen(!isChatPanelOpen)}
@@ -916,62 +894,61 @@ ${meeting.transcript}
 
               {/* Display notes area */}
               <div className="flex-grow overflow-y-auto p-6 bg-slate-50/40 relative">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeTab}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 4 }}
-                    transition={{ duration: 0.12 }}
-                    className="bg-white border border-[#E9E9EB]/80 rounded-2xl p-6 shadow-2xs text-left"
-                  >
-                    {activeTab === "summary" ? (
-                      <div id="markdown_body" className="space-y-2 leading-relaxed font-sans">
-                        {renderMarkdown(selectedMeeting.summary)}
-                      </div>
-                    ) : (
-                      <div className="font-sans text-slate-700 leading-7 text-[14px] whitespace-pre-wrap font-medium space-y-3 text-justify [text-wrap:pretty]">
-                        {selectedMeeting.transcript ? (
-                          selectedMeeting.transcript.split("\n").map((line, idx) => {
-                            const match = line.match(/^\[(\d{2}:\d{2})\]\s*(.*?):\s*(.*)/);
-                            if (match) {
-                              const timestamp = match[1];
-                              const speaker = match[2];
-                              const utterance = match[3];
-                              return (
-                                <div key={idx} className="flex flex-col md:flex-row md:items-start gap-2.5 pb-2 border-b border-[#F4F4F5] last:border-b-0">
-                                  <div className="flex items-center gap-2 shrink-0 md:w-32">
-                                    <span className="text-[10px] bg-[#EBEBEB] text-[#111111] px-1.5 py-0.5 rounded-sm font-semibold font-mono">
-                                      {timestamp}
-                                    </span>
-                                    <span className="text-xs font-bold text-[#111111] truncate max-w-[80px]" title={speaker}>
-                                      {speaker}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-slate-655 text-left flex-grow">
-                                    {utterance}
-                                  </p>
-                                </div>
-                              );
-                            }
+                <div className="space-y-5">
+                  <section className="bg-white border border-[#E9E9EB]/80 rounded-2xl p-6 shadow-2xs text-left">
+                    <div className="flex items-center gap-2 mb-4">
+                      <BookOpen className="w-4 h-4 text-[#135bf1]" />
+                      <h2 className="text-lg font-black text-slate-900">Resumen ejecutivo</h2>
+                    </div>
+                    <div id="markdown_body" className="space-y-2 leading-relaxed font-sans">
+                      {renderMarkdown(selectedMeeting.summary)}
+                    </div>
+                  </section>
+
+                  <section className="bg-white border border-[#E9E9EB]/80 rounded-2xl p-6 shadow-2xs text-left">
+                    <div className="flex items-center gap-2 mb-4">
+                      <FileText className="w-4 h-4 text-[#135bf1]" />
+                      <h2 className="text-lg font-black text-slate-900">Transcripcion</h2>
+                    </div>
+                    <div className="font-sans text-slate-700 leading-7 text-[14px] whitespace-pre-wrap font-medium space-y-3 text-justify [text-wrap:pretty]">
+                      {selectedMeeting.transcript ? (
+                        selectedMeeting.transcript.split("\n").map((line, idx) => {
+                          const match = line.match(/^\[(\d{2}:\d{2})\]\s*(.*?):\s*(.*)/);
+                          if (match) {
+                            const timestamp = match[1];
+                            const speaker = match[2];
+                            const utterance = match[3];
                             return (
-                              <p key={idx} className="text-xs text-slate-655 text-left">
-                                {line}
-                              </p>
+                              <div key={idx} className="flex flex-col md:flex-row md:items-start gap-2.5 pb-2 border-b border-[#F4F4F5] last:border-b-0">
+                                <div className="flex items-center gap-2 shrink-0 md:w-32">
+                                  <span className="text-[10px] bg-[#EBEBEB] text-[#111111] px-1.5 py-0.5 rounded-sm font-semibold font-mono">
+                                    {timestamp}
+                                  </span>
+                                  <span className="text-xs font-bold text-[#111111] truncate max-w-[80px]" title={speaker}>
+                                    {speaker}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-655 text-left flex-grow">
+                                  {utterance}
+                                </p>
+                              </div>
                             );
-                          })
-                        ) : (
-                          <p className="font-sans italic text-slate-400 text-xs text-center py-8">
-                            No hay transcripci?n disponible.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </motion.div>
-                </AnimatePresence>
+                          }
+                          return (
+                            <p key={idx} className="text-xs text-slate-655 text-left leading-6">
+                              {line}
+                            </p>
+                          );
+                        })
+                      ) : (
+                        <p className="font-sans italic text-slate-400 text-xs text-center py-8">
+                          No hay transcripcion disponible.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                </div>
               </div>
-
-
 
             </div>
 
@@ -981,7 +958,7 @@ ${meeting.transcript}
                 <motion.div
                   id="olli_assistant_column"
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 340, opacity: 1 }}
+                  animate={{ width: 320, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{ type: "tween", duration: 0.2 }}
                   className="bg-white flex flex-col h-full shrink-0 border-l border-[#EBEBEB] overflow-hidden"
@@ -1099,21 +1076,21 @@ ${meeting.transcript}
                         
                         <div className="grid grid-cols-1 gap-2 select-none">
                           <button
-                            onClick={() => handleQueryOlliChat("¿Cuáles son las decisiones tomadas en esta reunión?")}
+                            onClick={() => handleQueryOlliChat("Cuales son las decisiones tomadas en esta reunion?")}
                             disabled={isGeneratingChat}
                             className="text-[11px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-3 py-2 rounded-xl transition-colors cursor-pointer text-left"
                           >
                         Decisiones tomadas
                           </button>
                           <button
-                            onClick={() => handleQueryOlliChat("Escribe un plan de acción con tareas y responsables.")}
+                            onClick={() => handleQueryOlliChat("Escribe un plan de accion con tareas y responsables.")}
                             disabled={isGeneratingChat}
                             className="text-[11px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-3 py-2 rounded-xl transition-colors cursor-pointer text-left"
                           >
                             Crear plan de accion
                           </button>
                           <button
-                            onClick={() => handleQueryOlliChat("Hazme un resumen ejecutivo de 3 viñetas breves.")}
+                            onClick={() => handleQueryOlliChat("Hazme un resumen ejecutivo de 3 vinetas breves.")}
                             disabled={isGeneratingChat}
                             className="text-[11px] font-semibold bg-white hover:bg-slate-50 border border-[#E9E9EB] text-[#135bf1] px-3 py-2 rounded-xl transition-colors cursor-pointer text-left"
                           >
@@ -1137,7 +1114,7 @@ ${meeting.transcript}
                             type="text"
                             value={userChatMessage}
                             onChange={(e) => setUserChatMessage(e.target.value)}
-                            placeholder="Pregunta sobre esta conversaci?n..."
+                            placeholder="Pregunta sobre esta conversacion..."
                             disabled={isGeneratingChat}
                             className="w-full bg-[#F4F4F5] pl-3.5 pr-10 py-2 text-xs rounded-xl focus:bg-white outline-none border border-transparent focus:border-[#EBEBEB] text-[#111111] placeholder-slate-450"
                           />
@@ -1154,7 +1131,7 @@ ${meeting.transcript}
                     </div>
                   ) : chatTab === "outline" ? (
                     <div className="flex-grow p-4 overflow-y-auto text-left space-y-4">
-                      <p className="text-xs font-bold text-[#111111]">Gu?a de la reuni?n</p>
+                      <p className="text-xs font-bold text-[#111111]">Guia de la reunion</p>
                       <div className="space-y-2.5">
                         {selectedMeeting.summary.split("\n").filter(l => l.startsWith("##") || l.startsWith("###")).map((sectionHeader, sIdx) => {
                           const cleanSection = sectionHeader.replace(/^#+\s*/, "");
@@ -1162,29 +1139,26 @@ ${meeting.transcript}
                             <div 
                               key={sIdx} 
                               className="p-3 bg-white border border-[#E9E9EB] rounded-xl hover:border-[#135bf1]/40 transition-colors cursor-pointer text-xs font-semibold text-[#135bf1]"
-                              onClick={() => {
-                                // simulated jump to outline paragraph by highlighting summary tab
-                                setActiveTab("summary");
-                              }}
+                              onClick={() => {}}
                             >
-                              📍 {cleanSection}
+                        {cleanSection}
                             </div>
                           );
                         })}
                         {selectedMeeting.summary.split("\n").filter(l => l.startsWith("##") || l.startsWith("###")).length === 0 && (
-                          <p className="text-[11px] text-slate-400 italic">No se encontraron t?tulos estructurados en el resumen.</p>
+                          <p className="text-[11px] text-slate-400 italic">No se encontraron titulos estructurados en el resumen.</p>
                         )}
                       </div>
                     </div>
                   ) : (
                     <div className="flex-grow p-4 text-left space-y-4">
-                      <p className="text-xs font-bold text-[#111111]">Team Notas or Notes:</p>
-                      <p className="text-[11px] text-slate-500">Agrega comentarios o anotaciones para consolidar el acta corporativa con tus compañeros.</p>
+                      <p className="text-xs font-bold text-[#111111]">Notas del estudiante</p>
+                      <p className="text-[11px] text-slate-500">Agrega comentarios o anotaciones para consolidar el acta.</p>
                       <div className="space-y-3">
                         <textarea 
                           rows={4}
                           className="w-full p-3 bg-white border border-[#E9E9EB] text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-[#135bf1]"
-                          placeholder="Escribe un comentario o aclaración sobre el acta..."
+                          placeholder="Escribe un comentario o aclaracion sobre el acta..."
                         />
                         <button className="px-4 py-2 bg-[#135bf1] text-white text-xs font-bold rounded-lg hover:bg-[#0746cc]">
                           Agregar Nota
@@ -1297,7 +1271,7 @@ ${meeting.transcript}
                     type="text"
                     value={emailSubject}
                     onChange={(e) => setEmailSubject(e.target.value)}
-                    placeholder={`Acta de reuni?n: ${selectedMeeting.title}`}
+                    placeholder={`Acta de reunion: ${selectedMeeting.title}`}
                     disabled={isSendingEmail}
                     className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#135bf1] focus:bg-white transition-all text-slate-800 placeholder-slate-450"
                   />
