@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AppSettings, Meeting, User } from "../types";
+import { AppSettings, Meeting, MeetingFolder, User } from "../types";
 
 type ApiOptions = RequestInit & { allow401?: boolean };
 
@@ -94,6 +94,25 @@ export async function updateMeetingInCloud(
 
 export async function deleteMeetingFromCloud(_userId: string, meetingId: string): Promise<void> {
   await api(`/api/meetings/${encodeURIComponent(meetingId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchMeetingFolders(_userId: string): Promise<MeetingFolder[]> {
+  const data = await api<{ folders: MeetingFolder[] }>("/api/folders");
+  return data.folders || [];
+}
+
+export async function createMeetingFolder(_userId: string, name: string): Promise<MeetingFolder> {
+  const data = await api<{ folder: MeetingFolder }>("/api/folders", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  return data.folder;
+}
+
+export async function deleteMeetingFolder(_userId: string, folderId: string): Promise<void> {
+  await api(`/api/folders/${encodeURIComponent(folderId)}`, {
     method: "DELETE",
   });
 }

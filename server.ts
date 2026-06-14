@@ -5,10 +5,13 @@ import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import nodemailer from "nodemailer";
 import {
+  createMeetingFolder,
   deleteAccount,
+  deleteMeetingFolder,
   deleteMeeting,
   getSettings,
   getUserFromSession,
+  listMeetingFolders,
   listMeetings,
   loginLocalUser,
   logoutLocalSession,
@@ -192,6 +195,27 @@ app.patch("/api/meetings/:id", requireLocalUser, async (req, res): Promise<any> 
 app.delete("/api/meetings/:id", requireLocalUser, async (req, res): Promise<any> => {
   const user = (req as any).localUser as PublicLocalUser;
   await deleteMeeting(user.uid, req.params.id);
+  return res.json({ ok: true });
+});
+
+app.get("/api/folders", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  return res.json({ folders: await listMeetingFolders(user.uid) });
+});
+
+app.post("/api/folders", requireLocalUser, async (req, res): Promise<any> => {
+  try {
+    const user = (req as any).localUser as PublicLocalUser;
+    const folder = await createMeetingFolder(user.uid, req.body?.name || "");
+    return res.json({ folder });
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message || "No se pudo crear la carpeta." });
+  }
+});
+
+app.delete("/api/folders/:id", requireLocalUser, async (req, res): Promise<any> => {
+  const user = (req as any).localUser as PublicLocalUser;
+  await deleteMeetingFolder(user.uid, req.params.id);
   return res.json({ ok: true });
 });
 

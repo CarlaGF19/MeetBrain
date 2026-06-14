@@ -18,10 +18,17 @@ export interface Meeting {
   duration: string; // formatted: 'MM:SS' or 'HH:MM:SS'
   transcript: string;
   summary: string;
+  folderId?: string | null;
   audioMimeType?: string;
   isFavorite?: boolean;
   audioSizeKb?: number;
   isDraft?: boolean;
+}
+
+export interface MeetingFolder {
+  id: string;
+  name: string;
+  createdAt: string;
 }
 
 export interface AppSettings {

@@ -34,10 +34,17 @@ export type LocalMeeting = {
   duration: string;
   transcript: string;
   summary: string;
+  folderId?: string | null;
   audioMimeType?: string;
   isFavorite?: boolean;
   audioSizeKb?: number;
   isDraft?: boolean;
+};
+
+export type LocalMeetingFolder = {
+  id: string;
+  name: string;
+  createdAt: string;
 };
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -145,10 +152,20 @@ function migrate(db: Database) {
       duration TEXT NOT NULL,
       transcript TEXT NOT NULL,
       summary TEXT NOT NULL,
+      folder_id TEXT,
       audio_mime_type TEXT,
       is_favorite INTEGER NOT NULL DEFAULT 0,
       audio_size_kb INTEGER,
       is_draft INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS meeting_folders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -166,6 +183,10 @@ function migrate(db: Database) {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
+
+  try {
+    db.run("ALTER TABLE meetings ADD COLUMN folder_id TEXT");
+  } catch (error) {}
 }
 
 function getSingle<T extends Record<string, any>>(db: Database, sql: string, params: any[] = []): T | null {
@@ -385,6 +406,7 @@ export async function listMeetings(userId: string) {
     duration: row.duration,
     transcript: row.transcript,
     summary: row.summary,
+    folderId: row.folder_id || null,
     audioMimeType: row.audio_mime_type || undefined,
     isFavorite: !!row.is_favorite,
     audioSizeKb: row.audio_size_kb ?? undefined,
@@ -398,8 +420,8 @@ export async function saveMeeting(userId: string, meeting: LocalMeeting) {
   const existing = getSingle(db, "SELECT id, created_at FROM meetings WHERE id = ? AND user_id = ?", [meeting.id, userId]);
   db.run(
     `INSERT OR REPLACE INTO meetings
-      (id, user_id, title, date, duration, transcript, summary, audio_mime_type, is_favorite, audio_size_kb, is_draft, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, user_id, title, date, duration, transcript, summary, folder_id, audio_mime_type, is_favorite, audio_size_kb, is_draft, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       meeting.id,
       userId,
@@ -408,6 +430,7 @@ export async function saveMeeting(userId: string, meeting: LocalMeeting) {
       meeting.duration,
       meeting.transcript,
       meeting.summary,
+      meeting.folderId || null,
       meeting.audioMimeType || null,
       meeting.isFavorite ? 1 : 0,
       meeting.audioSizeKb ?? null,
@@ -430,6 +453,7 @@ export async function updateMeeting(userId: string, meetingId: string, updates: 
     duration: updates.duration ?? current.duration,
     transcript: updates.transcript ?? current.transcript,
     summary: updates.summary ?? current.summary,
+    folderId: updates.folderId !== undefined ? updates.folderId : current.folder_id ?? null,
     audioMimeType: updates.audioMimeType ?? current.audio_mime_type ?? undefined,
     isFavorite: updates.isFavorite ?? !!current.is_favorite,
     audioSizeKb: updates.audioSizeKb ?? current.audio_size_kb ?? undefined,
@@ -440,6 +464,55 @@ export async function updateMeeting(userId: string, meetingId: string, updates: 
 export async function deleteMeeting(userId: string, meetingId: string) {
   const db = await getDb();
   db.run("DELETE FROM meetings WHERE id = ? AND user_id = ?", [meetingId, userId]);
+  persist(db);
+}
+
+export async function listMeetingFolders(userId: string): Promise<LocalMeetingFolder[]> {
+  const db = await getDb();
+  return getAll<any>(
+    db,
+    "SELECT id, name, created_at FROM meeting_folders WHERE user_id = ? ORDER BY lower(name) ASC",
+    [userId]
+  ).map((row) => ({
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function createMeetingFolder(userId: string, name: string): Promise<LocalMeetingFolder> {
+  const db = await getDb();
+  const cleanName = name.trim();
+  if (cleanName.length < 2) throw new Error("La carpeta necesita un nombre.");
+
+  const existing = getSingle(db, "SELECT id FROM meeting_folders WHERE user_id = ? AND lower(name) = ?", [
+    userId,
+    cleanName.toLowerCase(),
+  ]);
+  if (existing) throw new Error("Ya existe una carpeta con ese nombre.");
+
+  const createdAt = nowIso();
+  const folder = {
+    id: randomId("folder"),
+    name: cleanName,
+    createdAt,
+  };
+  db.run(
+    "INSERT INTO meeting_folders (id, user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    [folder.id, userId, folder.name, createdAt, createdAt]
+  );
+  persist(db);
+  return folder;
+}
+
+export async function deleteMeetingFolder(userId: string, folderId: string) {
+  const db = await getDb();
+  db.run("UPDATE meetings SET folder_id = NULL, updated_at = ? WHERE user_id = ? AND folder_id = ?", [
+    nowIso(),
+    userId,
+    folderId,
+  ]);
+  db.run("DELETE FROM meeting_folders WHERE id = ? AND user_id = ?", [folderId, userId]);
   persist(db);
 }
 

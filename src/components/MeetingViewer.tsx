@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { Meeting } from "../types";
+import { Meeting, MeetingFolder } from "../types";
 import { formatInUTC5 } from "../lib/dateUtils";
 import { jsPDF } from "jspdf";
 import {
@@ -14,8 +14,6 @@ import {
   Clock,
   Pin,
   Trash2,
-  Copy,
-  Check,
   Download,
   Share2,
   BookOpen,
@@ -35,18 +33,22 @@ import {
   HelpCircle,
   FolderOpen,
   FileAudio,
-  MessageSquare
+  MessageSquare,
+  Plus
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface MeetingViewerProps {
   meetings: Meeting[];
+  folders: MeetingFolder[];
   selectedMeeting: Meeting | null;
   onSelectMeeting: (meeting: Meeting) => void;
   onDeleteMeeting: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onUpdateMeetingTitle: (id: string, newTitle: string) => void;
   onUpdateMeeting: (id: string, updatedFields: Partial<Meeting>) => void;
+  onCreateFolder: (name: string) => Promise<MeetingFolder>;
+  onDeleteFolder: (id: string) => Promise<void>;
 }
 
 interface ChatMessage {
@@ -57,15 +59,21 @@ interface ChatMessage {
 
 export default function MeetingViewer({
   meetings,
+  folders,
   selectedMeeting,
   onSelectMeeting,
   onDeleteMeeting,
   onToggleFavorite,
   onUpdateMeetingTitle,
   onUpdateMeeting,
+  onCreateFolder,
+  onDeleteFolder,
 }: MeetingViewerProps) {
-  const [copied, setCopiado] = useState(false);
   const [selectedDateFilter, setSelectedDateFilter] = useState("");
+  const [selectedFolderFilter, setSelectedFolderFilter] = useState("all");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [folderError, setFolderError] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
   
@@ -192,14 +200,64 @@ Puedes pedirme decisiones, tareas, resumen ejecutivo o preguntas sobre la transc
     const meetingDate = new Date(meeting.date);
     const meetingDay = `${meetingDate.getFullYear()}-${String(meetingDate.getMonth() + 1).padStart(2, "0")}-${String(meetingDate.getDate()).padStart(2, "0")}`;
     const matchesDate = !selectedDateFilter || meetingDay === selectedDateFilter;
+    const matchesFolder =
+      selectedFolderFilter === "all" ||
+      (selectedFolderFilter === "none" ? !meeting.folderId : meeting.folderId === selectedFolderFilter);
     
-    return matchesDate;
+    return matchesDate && matchesFolder;
   });
 
-  const handleCopyClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
+  const meetingsOnSelectedDate = selectedDateFilter
+    ? meetings.filter((meeting) => {
+        const meetingDate = new Date(meeting.date);
+        const meetingDay = `${meetingDate.getFullYear()}-${String(meetingDate.getMonth() + 1).padStart(2, "0")}-${String(meetingDate.getDate()).padStart(2, "0")}`;
+        return meetingDay === selectedDateFilter;
+      })
+    : [];
+
+  useEffect(() => {
+    if ((!selectedDateFilter && selectedFolderFilter === "all") || filteredMeetings.length === 0) return;
+    if (!selectedMeeting || !filteredMeetings.some((meeting) => meeting.id === selectedMeeting.id)) {
+      onSelectMeeting(filteredMeetings[0]);
+    }
+  }, [selectedDateFilter, selectedFolderFilter, filteredMeetings, selectedMeeting, onSelectMeeting]);
+
+  const handleCreateFolder = async () => {
+    const cleanName = newFolderName.trim();
+    if (!cleanName) return;
+    setIsCreatingFolder(true);
+    setFolderError("");
+    try {
+      const folder = await onCreateFolder(cleanName);
+      setNewFolderName("");
+      setSelectedFolderFilter(folder.id);
+      if (selectedMeeting) {
+        onUpdateMeeting(selectedMeeting.id, { folderId: folder.id });
+      }
+    } catch (error: any) {
+      setFolderError(error.message || "No se pudo crear la carpeta.");
+    } finally {
+      setIsCreatingFolder(false);
+    }
+  };
+
+  const selectedFolderName = selectedMeeting?.folderId
+    ? folders.find((folder) => folder.id === selectedMeeting.folderId)?.name
+    : "";
+
+  const canAssignDateToFolder =
+    selectedDateFilter &&
+    selectedFolderFilter !== "all" &&
+    selectedFolderFilter !== "none" &&
+    meetingsOnSelectedDate.length > 0;
+
+  const handleAssignSelectedDateToFolder = () => {
+    if (!canAssignDateToFolder) return;
+    meetingsOnSelectedDate.forEach((meeting) => {
+      if (meeting.folderId !== selectedFolderFilter) {
+        onUpdateMeeting(meeting.id, { folderId: selectedFolderFilter });
+      }
+    });
   };
 
   const startEditTitle = (meeting: Meeting) => {
@@ -622,26 +680,91 @@ ${meeting.transcript}
             
             {/* Left Pane - Document text and media */}
             <div className="flex-grow flex flex-col h-full min-w-0 border-r border-[#E9E9EB] relative">
-              <div className="px-6 py-2 border-b border-[#E9E9EB] bg-white flex items-center justify-end gap-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400" htmlFor="meeting-date-filter">
-                  Fecha
-                </label>
-                <input
-                  id="meeting-date-filter"
-                  type="date"
-                  value={selectedDateFilter}
-                  onChange={(e) => setSelectedDateFilter(e.target.value)}
-                  className="h-8 rounded-lg border border-[#E9E9EB] bg-white px-3 text-xs font-semibold text-slate-600 outline-none transition-all hover:border-[#135bf1]/30 focus:border-[#135bf1]"
-                />
-                {selectedDateFilter && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDateFilter("")}
-                    className="h-8 px-3 rounded-lg border border-[#E9E9EB] bg-white text-[10px] font-bold text-slate-500 hover:text-[#135bf1] transition-colors"
+              <div className="px-6 py-2 border-b border-[#E9E9EB] bg-white flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  <select
+                    value={selectedFolderFilter}
+                    onChange={(e) => setSelectedFolderFilter(e.target.value)}
+                    className="h-8 min-w-[150px] rounded-lg border border-[#E9E9EB] bg-white px-3 text-xs font-semibold text-slate-650 outline-none transition-all hover:border-[#135bf1]/30 focus:border-[#135bf1]"
+                    title="Filtrar por carpeta"
                   >
-                    Limpiar
-                  </button>
-                )}
+                    <option value="all">Todas las carpetas</option>
+                    <option value="none">Sin carpeta</option>
+                    {folders.map((folder) => (
+                      <option key={folder.id} value={folder.id}>{folder.name}</option>
+                    ))}
+                  </select>
+
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCreateFolder();
+                      }}
+                      placeholder="Nueva carpeta"
+                      className="h-8 w-36 rounded-lg border border-[#E9E9EB] bg-white px-3 text-xs font-semibold text-slate-650 placeholder:text-slate-400 outline-none transition-all hover:border-[#135bf1]/30 focus:border-[#135bf1]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateFolder}
+                      disabled={isCreatingFolder || !newFolderName.trim()}
+                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-[#135bf1] text-white hover:bg-[#0746cc] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Crear carpeta"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {folderError && (
+                    <span className="text-[10px] font-semibold text-rose-600">{folderError}</span>
+                  )}
+
+                  {selectedFolderFilter !== "all" && selectedFolderFilter !== "none" && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteFolder(selectedFolderFilter)}
+                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-[#E9E9EB] bg-white text-slate-400 hover:border-rose-100 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                      title="Eliminar carpeta"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    id="meeting-date-filter"
+                    type="date"
+                    value={selectedDateFilter}
+                    onChange={(e) => setSelectedDateFilter(e.target.value)}
+                    className="h-8 rounded-lg border border-[#E9E9EB] bg-white px-3 text-xs font-semibold text-slate-600 outline-none transition-all hover:border-[#135bf1]/30 focus:border-[#135bf1]"
+                  />
+                  {canAssignDateToFolder && (
+                    <button
+                      type="button"
+                      onClick={handleAssignSelectedDateToFolder}
+                      className="h-8 rounded-lg bg-[#135bf1] px-3 text-[11px] font-bold text-white hover:bg-[#0746cc] transition-colors"
+                      title="Asignar todas las reuniones de la fecha a esta carpeta"
+                    >
+                      Asignar fecha
+                    </button>
+                  )}
+                  {(selectedDateFilter || selectedFolderFilter !== "all") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDateFilter("");
+                        setSelectedFolderFilter("all");
+                      }}
+                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-[#E9E9EB] bg-white text-slate-500 hover:text-[#135bf1] transition-colors"
+                      title="Limpiar filtros"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
               
               {/* Doc Workspace header controls */}
@@ -690,6 +813,30 @@ ${meeting.transcript}
                       <Clock className="w-3.5 h-3.5 mr-1" />
                       {selectedMeeting.duration}
                     </span>
+                    <span className="flex items-center gap-1.5">
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      <select
+                        value={selectedMeeting.folderId || ""}
+                        onChange={(e) => onUpdateMeeting(selectedMeeting.id, { folderId: e.target.value || null })}
+                        className="h-7 max-w-[180px] rounded-lg border border-[#E9E9EB] bg-white px-2 text-[11px] font-semibold text-slate-600 outline-none hover:border-[#135bf1]/30 focus:border-[#135bf1]"
+                        title="Asignar carpeta"
+                      >
+                        <option value="">Sin carpeta</option>
+                        {folders.map((folder) => (
+                          <option key={folder.id} value={folder.id}>{folder.name}</option>
+                        ))}
+                      </select>
+                      {selectedFolderName && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateMeeting(selectedMeeting.id, { folderId: null })}
+                          className="text-[10px] text-slate-400 hover:text-rose-500"
+                          title={`Quitar de ${selectedFolderName}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </span>
                   </div>
                 </div>
 
@@ -719,6 +866,17 @@ ${meeting.transcript}
                     title="Descargar PDF"
                   >
                     <FileText className="w-3.5 h-3.5 text-emerald-500" />
+                  </button>
+                  <button
+                    onClick={() => setIsChatPanelOpen(!isChatPanelOpen)}
+                    className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                      isChatPanelOpen
+                        ? "bg-[#135bf1]/5 border-[#135bf1]/15 text-[#135bf1]"
+                        : "bg-white border-[#E9E9EB] text-slate-500 hover:text-[#135bf1]"
+                    }`}
+                    title={isChatPanelOpen ? "Cerrar asistente" : "Abrir asistente"}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
                   </button>
                   
                   {/* Compartir pill selector button */}
@@ -781,37 +939,6 @@ ${meeting.transcript}
                   </div>
                 </div>
               )}
-
-              {/* Document quick actions */}
-              <div className="px-6 py-2 border-b border-[#F2F2F2] flex items-center justify-end bg-white">
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleCopyClipboard(selectedMeeting.summary)}
-                    className="px-2.5 py-1.5 bg-slate-55 hover:bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 flex items-center space-x-1.5 transition-colors cursor-pointer border border-[#E9E9EB]"
-                  >
-                    {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    <span>{copied ? "Copiado" : "Copiar resumen"}</span>
-                  </button>
-                  <button
-                    onClick={() => handleCopyClipboard(selectedMeeting.transcript)}
-                    className="px-2.5 py-1.5 bg-slate-55 hover:bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 flex items-center space-x-1.5 transition-colors cursor-pointer border border-[#E9E9EB]"
-                  >
-                    <FileText className="w-3 h-3" />
-                    <span>Copiar transcripcion</span>
-                  </button>
-                  <button
-                    onClick={() => setIsChatPanelOpen(!isChatPanelOpen)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center space-x-1.5 transition-colors cursor-pointer border ${
-                      isChatPanelOpen
-                        ? "bg-[#135bf1]/5 border-[#135bf1]/15 text-[#135bf1]"
-                        : "bg-slate-50 hover:bg-slate-100 border-[#E9E9EB] text-slate-500"
-                    }`}
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>{isChatPanelOpen ? "Cerrar asistente" : "Abrir asistente"}</span>
-                  </button>
-                </div>
-              </div>
 
               {/* Display notes area */}
               <div className="flex-grow overflow-y-auto p-6 bg-slate-50/40 relative">

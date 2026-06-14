@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { User, Meeting, AppSettings } from "./types";
+import { User, Meeting, AppSettings, MeetingFolder } from "./types";
 import LoginRegister from "./components/LoginRegister";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -20,6 +20,9 @@ import {
   saveMeetingToCloud,
   updateMeetingInCloud,
   deleteMeetingFromCloud,
+  fetchMeetingFolders,
+  createMeetingFolder,
+  deleteMeetingFolder,
   fetchUserSettings,
   saveUserSettingsToCloud,
   deleteUserAccountFromCloud,
@@ -98,6 +101,7 @@ export default function App() {
 
   // Meetings and Settings state
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetingFolders, setMeetingFolders] = useState<MeetingFolder[]>([]);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [settings, setSettings] = useState<AppSettings>({
     aiProvider: "gemini",
@@ -222,6 +226,13 @@ export default function App() {
       } catch (err) {
         console.error("Error loading cloud meetings:", err);
       }
+
+      try {
+        const folders = await fetchMeetingFolders(user.uid);
+        setMeetingFolders(folders);
+      } catch (err) {
+        console.error("Error loading folders:", err);
+      }
     };
 
     loadData();
@@ -253,6 +264,7 @@ export default function App() {
       await deleteUserAccountFromCloud(user.uid);
       setUser(null);
       setMeetings([]);
+      setMeetingFolders([]);
       setSelectedMeeting(null);
     } catch (err) {
       console.error("Failed to delete account:", err);
@@ -456,6 +468,25 @@ export default function App() {
     }
   };
 
+  const handleCreateMeetingFolder = async (name: string) => {
+    if (!user) throw new Error("Debes iniciar sesion.");
+    const folder = await createMeetingFolder(user.uid, name);
+    setMeetingFolders((prev) => [...prev, folder].sort((a, b) => a.name.localeCompare(b.name)));
+    return folder;
+  };
+
+  const handleDeleteMeetingFolder = async (folderId: string) => {
+    if (!user) return;
+    await deleteMeetingFolder(user.uid, folderId);
+    setMeetingFolders((prev) => prev.filter((folder) => folder.id !== folderId));
+    setMeetings((prev) => prev.map((meeting) => (
+      meeting.folderId === folderId ? { ...meeting, folderId: null } : meeting
+    )));
+    setSelectedMeeting((prev) => (
+      prev?.folderId === folderId ? { ...prev, folderId: null } : prev
+    ));
+  };
+
   // Counting favorites count
   const favoritesCount = meetings.filter((m) => m.isFavorite).length;
 
@@ -600,12 +631,15 @@ export default function App() {
               {activeTab === "meetings" && (
                 <MeetingViewer
                   meetings={meetings}
+                  folders={meetingFolders}
                   selectedMeeting={selectedMeeting}
                   onSelectMeeting={setSelectedMeeting}
                   onDeleteMeeting={handleDeleteMeeting}
                   onToggleFavorite={handleToggleFavorite}
                   onUpdateMeetingTitle={handleUpdateMeetingTitle}
                   onUpdateMeeting={handleUpdateMeeting}
+                  onCreateFolder={handleCreateMeetingFolder}
+                  onDeleteFolder={handleDeleteMeetingFolder}
                 />
               )}
 
