@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { User } from "../types";
 import { loginLocalAccount, registerLocalAccount, resetLocalPassword } from "../lib/db";
 import { motion, AnimatePresence } from "motion/react";
@@ -42,13 +42,6 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
   const [newPassword, setNewPassword] = useState("");
   const [pendingUser, setPendingUser] = useState<User | null>(null);
   const [newRecoveryCode, setNewRecoveryCode] = useState("");
-
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
 
   const resetMessages = () => {
     setError("");
@@ -116,54 +109,54 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
   ];
 
   return (
-    <div className="h-screen w-screen bg-[#07111f] flex items-center justify-center select-none font-sans relative overflow-hidden p-4">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(19,91,241,0.30),transparent_32%),radial-gradient(circle_at_82%_80%,rgba(20,184,166,0.18),transparent_34%)] pointer-events-none" />
+    <div className="min-h-screen w-screen bg-[#07111f] flex items-center justify-center select-none font-sans relative overflow-y-auto p-3 sm:p-5">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(19,91,241,0.22),transparent_30%),radial-gradient(circle_at_88%_78%,rgba(20,184,166,0.14),transparent_30%)] pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.45 }}
-        className="w-full max-w-6xl max-h-[92vh] mx-auto bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10 shadow-[0_24px_80px_rgba(0,0,0,0.38)]"
+        className="w-full max-w-6xl mx-auto bg-white/[0.035] backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 relative z-10 shadow-[0_24px_80px_rgba(0,0,0,0.34)]"
       >
-        <div className="lg:col-span-7 p-8 lg:p-10 flex flex-col justify-between overflow-y-auto max-h-[92vh]">
-          <div className="flex items-center gap-2.5 text-left mb-8">
-            <div className="flex items-center justify-center gap-1 shrink-0 bg-white/5 px-3 py-2.5 rounded-xl border border-white/10">
-              <span className="w-1 h-6 rounded-full bg-[#135bf1]" />
-              <span className="w-1 h-4 rounded-full bg-cyan-400" />
-              <span className="w-1 h-5 rounded-full bg-teal-400" />
+        <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-center min-h-[520px]">
+          <div className="flex items-center gap-2.5 text-left mb-7">
+            <div className="flex items-center justify-center gap-1 shrink-0 bg-white/5 px-3 py-2 rounded-xl border border-white/10">
+              <span className="w-1 h-5 rounded-full bg-[#135bf1]" />
+              <span className="w-1 h-3.5 rounded-full bg-cyan-400" />
+              <span className="w-1 h-4.5 rounded-full bg-teal-400" />
             </div>
             <span className="font-display font-black text-2xl tracking-tighter text-white">
               MeetBrain<span className="text-cyan-300 ml-[1px]">.</span>
             </span>
           </div>
 
-          <div className="max-w-xl w-full my-auto py-8 text-left">
-            <h1 className="font-display text-3xl sm:text-[42px] font-black text-white tracking-tight leading-[44px] sm:leading-[52px]">
-              Tu espacio local para <br />
-              transcribir reuniones <br />
+          <div className="max-w-xl w-full text-left">
+            <h1 className="font-display text-[34px] sm:text-[46px] lg:text-[50px] font-black text-white tracking-tight leading-[1.03]">
+              Transcribe y organiza <br />
+              tus clases en local <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-blue-300 to-teal-300">
-                sin depender de Google Login.
+                con tu propia cuenta.
               </span>
             </h1>
-            <p className="font-sans text-sm sm:text-base text-slate-300 font-light mt-4 leading-relaxed max-w-lg">
-              Usuarios, reuniones y configuracion viven en SQLite dentro de tu equipo. Solo la API de Gemini se usa cuando decides transcribir o resumir.
+            <p className="font-sans text-sm sm:text-base text-slate-300 mt-4 leading-relaxed max-w-lg">
+              Usuarios, reuniones, carpetas y configuracion viven en SQLite dentro de tu equipo. Gemini solo se usa cuando decides generar resumenes o respuestas inteligentes.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-6">
+            <div className="grid grid-cols-2 gap-3 mt-7 max-w-lg">
               {[
-                { icon: Mic, title: "Captura local", text: "Graba microfono o audio digital desde Edge/Chrome." },
-                { icon: FileText, title: "Actas privadas", text: "Guarda transcripciones y resumenes en tu base SQLite." },
-                { icon: Bot, title: "IA opcional", text: "Gemini solo procesa audio cuando configuras tu API Key." },
-                { icon: ShieldCheck, title: "Sin Firebase", text: "Sin cuentas Google, Firestore ni dependencia de Vercel." },
+                { icon: Mic, title: "Captura local", text: "Microfono o audio digital." },
+                { icon: FileText, title: "Actas privadas", text: "Todo queda en SQLite." },
+                { icon: Bot, title: "IA opcional", text: "Solo cuando la activas." },
+                { icon: ShieldCheck, title: "Sin nube obligatoria", text: "Sin Firebase ni Vercel." },
               ].map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.title} className="p-4 bg-white/[0.04] rounded-2xl border border-white/8">
-                    <div className="w-9 h-9 rounded-xl bg-cyan-400/10 border border-cyan-300/15 flex items-center justify-center text-cyan-300 mb-2.5">
-                      <Icon className="w-5 h-5" />
+                  <div key={item.title} className="p-3.5 bg-white/[0.045] rounded-2xl border border-white/8">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-400/10 border border-cyan-300/15 flex items-center justify-center text-cyan-300 mb-2">
+                      <Icon className="w-4 h-4" />
                     </div>
-                    <h3 className="font-display text-sm font-semibold text-white">{item.title}</h3>
-                    <p className="font-sans text-[11.5px] text-slate-400 mt-1 leading-normal">{item.text}</p>
+                    <h3 className="font-display text-[13px] font-semibold text-white">{item.title}</h3>
+                    <p className="font-sans text-[11px] text-slate-400 mt-0.5 leading-normal">{item.text}</p>
                   </div>
                 );
               })}
@@ -171,9 +164,9 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
           </div>
         </div>
 
-        <div className="lg:col-span-5 p-6 sm:p-10 lg:p-14 flex flex-col justify-center items-stretch bg-white/[0.02] relative">
+        <div className="lg:col-span-5 p-4 sm:p-7 lg:p-10 flex flex-col justify-center items-stretch bg-white/[0.025] relative">
           <div className="my-auto max-w-sm mx-auto w-full">
-            <div className="bg-white rounded-3xl border border-white/40 p-7 shadow-[0_20px_50px_rgba(0,0,0,0.22)] text-left relative overflow-hidden">
+            <div className="bg-white rounded-3xl border border-white/40 p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.22)] text-left relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#135bf1] via-cyan-400 to-teal-300" />
 
               {pendingUser && newRecoveryCode ? (
@@ -205,7 +198,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                     Acceso local
                   </h2>
                   <p className="font-sans text-xs text-slate-500 mt-2 leading-relaxed">
-                    Entra con tu usuario local. No necesitas Google para abrir tu boveda.
+                    Entra con usuario o correo. Tu boveda se abre desde esta maquina.
                   </p>
 
                   <div className="grid grid-cols-2 gap-1 bg-slate-100 rounded-xl p-1 mt-6">
@@ -296,7 +289,7 @@ export default function LoginRegister({ onLoginSuccess }: LoginRegisterProps) {
                     )}
                   </AnimatePresence>
 
-                  <div className="min-h-[50px] mt-5">
+                  <div className="min-h-[44px] mt-4">
                     {error && (
                       <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-[11px] font-semibold text-rose-700 flex gap-2">
                         <AlertCircle className="w-4 h-4 shrink-0" />
