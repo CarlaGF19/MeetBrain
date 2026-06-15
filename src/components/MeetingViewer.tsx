@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Meeting, MeetingFolder } from "../types";
 import { formatInUTC5 } from "../lib/dateUtils";
+import { cleanTextForExport } from "../lib/textCleanup";
 import { jsPDF } from "jspdf";
 import {
   FileText,
@@ -295,16 +296,18 @@ ${meeting.transcript}
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
-    const maxLineWidth = pageWidth - (margin * 2);
+    const margin = 18;
+    const footerY = pageHeight - 12;
+    const contentBottom = pageHeight - 24;
+    const maxLineWidth = pageWidth - margin * 2;
 
-    let yPosition = 25;
+    let yPosition = 24;
 
     const checkPageOverflow = (neededHeight: number) => {
-      if (yPosition + neededHeight > pageHeight - margin) {
+      if (yPosition + neededHeight > contentBottom) {
         doc.addPage();
         drawPageBackground();
-        yPosition = 25;
+        yPosition = 22;
       }
     };
 
@@ -317,20 +320,47 @@ ${meeting.transcript}
       doc.setFont("Helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
-      doc.text(`Olli AI Report  |  ${meeting.title}`, margin, pageHeight - 10);
+      doc.text(`Olli AI Report | ${meeting.title}`.slice(0, 92), margin, footerY);
       const pageNum = doc.getNumberOfPages();
-      doc.text(`Pag. ${pageNum}`, pageWidth - margin - 15, pageHeight - 10);
+      doc.text(`Pag. ${pageNum}`, pageWidth - margin - 15, footerY);
+    };
+
+    const writeHeading = (text: string) => {
+      checkPageOverflow(12);
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(19, 91, 241);
+      doc.text(text.toUpperCase(), margin, yPosition);
+      yPosition += 8;
+    };
+
+    const writeParagraphs = (text: string) => {
+      const paragraphs = text.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+      if (paragraphs.length === 0) {
+        paragraphs.push("(Sin contenido disponible)");
+      }
+
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(48, 56, 72);
+
+      paragraphs.forEach((paragraph) => {
+        const lines = doc.splitTextToSize(paragraph, maxLineWidth);
+        checkPageOverflow(lines.length * 5.3 + 3);
+        doc.text(lines, margin, yPosition);
+        yPosition += lines.length * 5.3 + 3;
+      });
     };
 
     drawPageBackground();
 
     // Document Header
     doc.setFont("Helvetica", "bold");
-    doc.setFontSize(20);
+    doc.setFontSize(18);
     doc.setTextColor(17, 17, 17);
     const titleLines = doc.splitTextToSize(meeting.title, maxLineWidth);
     doc.text(titleLines, margin, yPosition);
-    yPosition += (titleLines.length * 8) + 4;
+    yPosition += (titleLines.length * 7.5) + 4;
 
     // Subheader / Metadata
     doc.setFont("Helvetica", "normal");
@@ -347,77 +377,21 @@ ${meeting.transcript}
     doc.line(margin, yPosition, pageWidth - margin, yPosition);
     yPosition += 12;
 
-    // Sections
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(19, 91, 241);
-    doc.text("AI MINUTES & WORKSPACE REPORT", margin, yPosition);
-    yPosition += 10;
-
-    const summaryLines = meeting.summary.split("\n");
-    doc.setTextColor(51, 65, 85);
-
-    summaryLines.forEach((line) => {
-      const trimmed = line.trim();
-      if (trimmed === "") {
-        yPosition += 4;
-        return;
-      }
-
-      if (trimmed.startsWith("###")) {
-        const text = trimmed.replace(/^###\s*/, "").toUpperCase();
-        checkPageOverflow(10);
-        doc.setFont("Helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(19, 91, 241);
-        doc.text(text, margin, yPosition);
-        yPosition += 7;
-      } else if (trimmed.startsWith("##")) {
-        const text = trimmed.replace(/^##\s*/, "");
-        checkPageOverflow(12);
-        doc.setFont("Helvetica", "bold");
-        doc.setFontSize(12);
-        doc.setTextColor(17, 17, 17);
-        doc.text(text, margin, yPosition);
-        yPosition += 8;
-      } else if (trimmed.startsWith("#")) {
-        const text = trimmed.replace(/^#\s*/, "");
-        checkPageOverflow(15);
-        doc.setFont("Helvetica", "bold");
-        doc.setFontSize(14);
-        doc.setTextColor(19, 91, 241);
-        doc.text(text, margin, yPosition);
-        yPosition += 9;
-      } else {
-        doc.setFont("Helvetica", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(60, 60, 70);
-
-        let textToPrint = trimmed;
-        let leftOffset = margin;
-
-        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-          textToPrint = trimmed.replace(/^[-*]\s+/, "");
-          doc.text("o", margin, yPosition);
-          leftOffset = margin + 5;
-        } else {
-          const checklistMatch = trimmed.match(/^[-*]\s+\[([ xX])\]\s+(.*)/);
-          if (checklistMatch) {
-            const checked = checklistMatch[1].toLowerCase() === "x";
-            textToPrint = (checked ? "[X] " : "[ ] ") + checklistMatch[2];
-            leftOffset = margin + 2;
-          }
-        }
-
-        // Clean bold Markdown delimiters
-        textToPrint = textToPrint.replace(/\*\*/g, "");
-
-        const splitText = doc.splitTextToSize(textToPrint, pageWidth - leftOffset - margin);
-        checkPageOverflow(splitText.length * 5.2);
-        doc.text(splitText, leftOffset, yPosition);
-        yPosition += (splitText.length * 5.2);
-      }
+    const summary = cleanTextForExport(meeting.summary, {
+      fallback: "Borrador guardado localmente. Genera un resumen con IA cuando tengas una transcripcion estable.",
+      maxWords: 900,
     });
+    const transcript = cleanTextForExport(meeting.transcript, {
+      fallback: "(Sin transcripcion disponible)",
+      maxWords: 4500,
+    });
+
+    writeHeading("Resumen");
+    writeParagraphs(summary);
+
+    yPosition += 3;
+    writeHeading("Transcripcion");
+    writeParagraphs(transcript);
 
     return doc;
   };

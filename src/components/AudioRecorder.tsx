@@ -8,6 +8,7 @@ import { Mic, Square, Play, Pause, UploadCloud, FileAudio, AlertCircle, Sparkles
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
 import { isBrowserWhisperSupported, transcribePcmInBrowser, warmupBrowserWhisper } from "../lib/browserWhisper";
+import { cleanTextForExport } from "../lib/textCleanup";
 
 interface AudioRecorderProps {
   onTranscriptionSuccess: (transcription: { id?: string; title: string; transcript: string; summary: string }, durationSec: number) => void;
@@ -1167,7 +1168,10 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   };
 
   const downloadLivePDF = () => {
-    const textToPrint = liveTranscriptRef.current || liveTranscript || "(Sin palabras transcritas aún)";
+    const textToPrint = cleanTextForExport(liveTranscriptRef.current || liveTranscript, {
+      fallback: "(Sin palabras transcritas aun)",
+      maxWords: 4500,
+    });
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "mm",
@@ -1176,10 +1180,12 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
-    const maxLineWidth = pageWidth - (margin * 2);
+    const margin = 18;
+    const footerY = pageHeight - 12;
+    const contentBottom = pageHeight - 24;
+    const maxLineWidth = pageWidth - margin * 2;
 
-    let yPosition = 25;
+    let yPosition = 24;
 
     const drawPageBackground = () => {
       // Top accent bar overlay
@@ -1190,9 +1196,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       doc.setFont("Helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
-      doc.text(`Grabación Sincronizada en Vivo  |  MeetingBrain`, margin, pageHeight - 10);
+      doc.text("Grabacion sincronizada en vivo | Olli", margin, footerY);
       const pageNum = doc.getNumberOfPages();
-      doc.text(`Pág. ${pageNum}`, pageWidth - margin - 15, pageHeight - 10);
+      doc.text(`Pag. ${pageNum}`, pageWidth - margin - 15, footerY);
     };
 
     drawPageBackground();
@@ -1201,7 +1207,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(18);
     doc.setTextColor(26, 37, 58);
-    doc.text(`Borrador Transcrito en Tiempo Real`, margin, yPosition);
+    doc.text("Borrador transcrito en vivo", margin, yPosition);
     yPosition += 10;
 
     // Metadata
@@ -1211,7 +1217,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     const m = Math.floor(duration / 60);
     const s = duration % 60;
     const liveDurationFormatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    doc.text(`Fecha: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}  |  Duración de Audio: ${liveDurationFormatted}`, margin, yPosition);
+    doc.text(`Fecha: ${new Date().toLocaleDateString()} | Duracion: ${liveDurationFormatted}`, margin, yPosition);
     yPosition += 12;
 
     // Line separator
@@ -1221,18 +1227,18 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
     // Body text
     doc.setFont("Helvetica", "normal");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(60, 60, 60);
 
     const textLines = doc.splitTextToSize(textToPrint, maxLineWidth);
     for (const line of textLines) {
-      if (yPosition > pageHeight - margin - 10) {
+      if (yPosition > contentBottom) {
         doc.addPage();
         drawPageBackground();
-        yPosition = 25;
+        yPosition = 22;
       }
       doc.text(line, margin, yPosition);
-      yPosition += 6.5;
+      yPosition += 5.4;
     }
 
     doc.save(`MeetingBrain_Borrador_Sincronizado_${Date.now()}.pdf`);
