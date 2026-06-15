@@ -53,6 +53,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isDigitalLiveTranscribing, setIsDigitalLiveTranscribing] = useState(false);
+  const [digitalLiveEnabled, setDigitalLiveEnabled] = useState(false);
 
   // Live Copilot chat states
   const [isCopilotActive, setIsCopilotActive] = useState(false);
@@ -250,6 +251,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const stopRecordingRef = useRef<() => void>();
+  const digitalLiveChunksRef = useRef<Blob[]>([]);
+  const digitalLiveLastFlushRef = useRef(0);
+  const digitalLiveBusyRef = useRef(false);
 
   const durationRef = useRef(0);
   const captureSourceRef = useRef<"mic" | "screen">("mic");
@@ -296,6 +300,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       timerIntervalRef.current = null;
     }
     setIsDigitalLiveTranscribing(false);
+    digitalLiveChunksRef.current = [];
+    digitalLiveBusyRef.current = false;
+    digitalLiveLastFlushRef.current = 0;
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -313,6 +320,65 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         recognitionRef.current.abort();
       } catch (e) {}
       recognitionRef.current = null;
+    }
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = String(reader.result || "");
+        resolve(result.split(",")[1] || "");
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const flushDigitalLiveTranscript = async (force = false) => {
+    if (!digitalLiveEnabled || captureSourceRef.current !== "screen") return;
+    if (digitalLiveBusyRef.current) return;
+    if (digitalLiveChunksRef.current.length === 0) return;
+
+    const now = Date.now();
+    if (!force && now - digitalLiveLastFlushRef.current < 8000) return;
+
+    const chunks = digitalLiveChunksRef.current.splice(0);
+    digitalLiveLastFlushRef.current = now;
+    digitalLiveBusyRef.current = true;
+    setIsDigitalLiveTranscribing(true);
+
+    try {
+      const audioBlob = new Blob(chunks, { type: "audio/webm" });
+      const audio = await blobToBase64(audioBlob);
+      const response = await fetch("/api/transcribe-live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audio,
+          mimeType: "audio/webm",
+          apiKey: settings.apiKey || "",
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo transcribir este segmento de audio digital.");
+      }
+
+      const data = await response.json();
+      const transcript = typeof data.transcript === "string" ? data.transcript.trim() : "";
+      if (transcript) {
+        const nextText = `${liveTranscriptRef.current ? `${liveTranscriptRef.current.trim()} ` : ""}${transcript}`.trim();
+        liveTranscriptRef.current = `${nextText} `;
+        setLiveTranscript(liveTranscriptRef.current);
+        setDraftWordCount(nextText.split(/\s+/).filter(Boolean).length);
+      }
+    } catch (error: any) {
+      setSpeechErrorNotice(error.message || "No se pudo transcribir el audio digital en vivo.");
+    } finally {
+      digitalLiveBusyRef.current = false;
+      setIsDigitalLiveTranscribing(false);
     }
   };
 
@@ -486,10 +552,15 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          if (captureSourceRef.current === "screen" && digitalLiveEnabled) {
+            digitalLiveChunksRef.current.push(event.data);
+            flushDigitalLiveTranscript(false);
+          }
         }
       };
 
       mediaRecorder.onstop = async () => {
+        await flushDigitalLiveTranscript(true);
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         const finalTranscript = liveTranscriptRef.current || "";
         const dur = durationRef.current || 0;
@@ -1168,10 +1239,10 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="w-full text-left"
               >
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch w-full mb-2">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch w-full max-w-3xl mx-auto mb-2">
                   
                   {/* LEFT COLUMN: TRIGGER AND MODE OPTIONS */}
-                  <div className="lg:col-span-7 flex flex-col items-center justify-center bg-slate-50/25 border border-slate-100 rounded-3xl p-6 sm:p-8 text-center relative shadow-3xs">
+                  <div className="lg:col-span-12 flex flex-col items-center justify-center bg-slate-50/25 border border-slate-100 rounded-3xl p-6 sm:p-8 text-center relative shadow-3xs">
                     <div className="text-slate-400 text-xs tracking-wider font-semibold uppercase mb-3">
                       Fuente de Captura de Audio
                     </div>
@@ -1205,7 +1276,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                     </div>
 
                     {captureSource === "screen" && (
-                      <div className="mb-6 p-4 bg-sky-50 border border-sky-100 rounded-xl text-[11px] text-sky-700 max-w-md text-left leading-relaxed">
+                      <div className="hidden">
                         
                         {isFirefox && (
                           <div className="mb-3.5 p-3 bg-red-50 border border-red-200/60 rounded-lg text-[10.5px] text-red-900 leading-normal">
@@ -1259,6 +1330,38 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                       </div>
                     )}
                     
+                    {captureSource === "screen" && (
+                      <div className="w-full max-w-md mb-6 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-3xs">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-xs font-bold text-slate-800">Audio digital de pestaÃ±a</p>
+                            <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+                              Activa texto en vivo solo si necesitas leer lo que dice la clase. Usa Gemini por segmentos.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = !digitalLiveEnabled;
+                              setDigitalLiveEnabled(next);
+                              setSpeechErrorNotice(
+                                next && !settings.apiKey?.trim()
+                                  ? "Para transcribir audio digital en vivo necesitas una API Key de Gemini en Settings."
+                                  : null
+                              );
+                            }}
+                            className={`w-12 h-6 rounded-full p-0.5 transition-colors ${digitalLiveEnabled ? "bg-[#135bf1]" : "bg-slate-200"}`}
+                            title="Activar transcripcion IA en vivo"
+                          >
+                            <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${digitalLiveEnabled ? "translate-x-6" : "translate-x-0"}`} />
+                          </button>
+                        </div>
+                        <div className="mt-3 text-[10px] font-semibold text-slate-400">
+                          {digitalLiveEnabled ? "IA en vivo activada: veras texto despues de unos segundos." : "Solo grabar audio: no mostrara palabras durante la captura."}
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Visual recording trigger button */}
                     <button
                       onClick={startRecording}
@@ -1282,7 +1385,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                   </div>
 
                   {/* RIGHT COLUMN: QUICK BENCHMARKS & BEST PRACTICES */}
-                  <div className="lg:col-span-5 flex flex-col justify-between bg-gradient-to-br from-slate-50/50 to-white border border-slate-100/90 rounded-3xl p-6 sm:p-8 text-left relative shadow-3xs">
+                  <div className="hidden">
                     <div>
                       <div className="text-[#2C5EAD] text-[10px] tracking-wider font-extrabold uppercase mb-2 flex items-center space-x-1">
                         <Sparkles className="w-3.5 h-3.5 text-[#1591DC]" />
@@ -1412,7 +1515,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                 <div className="space-y-2 bg-transparent pr-1">
                                   <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[9.5px] font-bold text-emerald-700 uppercase tracking-wider mb-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span>Transcripcion local en vivo</span>
+                                    <span>Transcripcion IA en vivo</span>
                                   </div>
                                   <div className="text-slate-800 font-normal whitespace-pre-wrap text-justify [text-wrap:pretty]">{liveTranscript}</div>
                                 </div>
@@ -1420,10 +1523,12 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                 <div className="text-slate-500 text-left py-12 flex flex-col items-center justify-center space-y-3 mt-4 px-4">
                                   <span className="text-3xl animate-pulse">💻🔊</span>
                                   <span className="text-xs font-bold text-[#2C5EAD] uppercase tracking-wider">
-                                    Capturando audio digital
+                                    {isDigitalLiveTranscribing ? "Transcribiendo segmento..." : "Capturando audio digital"}
                                   </span>
                                   <span className="text-[11px] font-medium text-slate-400 text-center leading-relaxed">
-                                    La app esta grabando el audio de la pestana o pantalla localmente. No se consumira Gemini durante la captura; la IA se usa despues para resumen, puntos clave o acciones.
+                                    {digitalLiveEnabled
+                                      ? "La app esta escuchando segmentos. Si hay voz clara, el texto aparecera aqui en unos segundos."
+                                      : "La app esta grabando el audio localmente. Activa la transcripcion IA en vivo antes de grabar si necesitas ver palabras durante la captura."}
                                   </span>
                                 </div>
                               ) : liveTranscript || interimTranscript ? (

@@ -610,9 +610,9 @@ export default function App() {
               {activeTab === "recorder" && (
                 <div className="space-y-6">
                   <div>
-                    <h1 className="text-xl font-bold text-slate-800 tracking-tight">Audio Workspace</h1>
+                    <h1 className="text-xl font-bold text-slate-800 tracking-tight">Grabacion de clase</h1>
                     <p className="text-xs text-slate-400 mt-1">
-                      Stream voice recordings or upload files directly. AI models segment highlights immediately.
+                      Elige microfono o audio digital. La transcripcion IA en vivo se activa solo cuando la necesitas.
                     </p>
                   </div>
                   <AudioRecorder
