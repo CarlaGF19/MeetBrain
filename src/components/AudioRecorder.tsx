@@ -55,6 +55,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isDigitalLiveTranscribing, setIsDigitalLiveTranscribing] = useState(false);
   const [digitalLiveEnabled, setDigitalLiveEnabled] = useState(false);
+  const [digitalAudioDebug, setDigitalAudioDebug] = useState("");
 
   // Live Copilot chat states
   const [isCopilotActive, setIsCopilotActive] = useState(false);
@@ -254,6 +255,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const digitalLivePcmSampleCountRef = useRef(0);
   const digitalLiveSampleRateRef = useRef(48000);
   const digitalLiveProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const digitalLivePeakRef = useRef(0);
+  const digitalLiveDebugLastUpdateRef = useRef(0);
   const digitalLiveLastFlushRef = useRef(0);
   const digitalLiveBusyRef = useRef(false);
   const digitalLiveEnabledRef = useRef(false);
@@ -309,6 +312,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     setIsDigitalLiveTranscribing(false);
     digitalLivePcmChunksRef.current = [];
     digitalLivePcmSampleCountRef.current = 0;
+    digitalLivePeakRef.current = 0;
+    digitalLiveDebugLastUpdateRef.current = 0;
+    setDigitalAudioDebug("");
     digitalLiveBusyRef.current = false;
     digitalLiveLastFlushRef.current = 0;
     if (digitalLiveProcessorRef.current) {
@@ -371,12 +377,13 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     const now = Date.now();
     if (!force && now - digitalLiveLastFlushRef.current < 8000) return;
 
-    const audio = consumeDigitalPcmBuffer();
-    digitalLiveLastFlushRef.current = now;
-    digitalLiveBusyRef.current = true;
-    setIsDigitalLiveTranscribing(true);
+      const audio = consumeDigitalPcmBuffer();
+      digitalLiveLastFlushRef.current = now;
+      digitalLiveBusyRef.current = true;
+      setIsDigitalLiveTranscribing(true);
+      setSpeechErrorNotice(null);
 
-    try {
+      try {
       const minSamples = Math.round(digitalLiveSampleRateRef.current * 1.5);
       if (audio.length < minSamples) {
         digitalLiveBusyRef.current = false;
@@ -391,7 +398,12 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         setDraftWordCount(nextText.split(/\s+/).filter(Boolean).length);
       }
     } catch (error: any) {
-      setSpeechErrorNotice(error.message || "No se pudo transcribir el audio digital con Whisper local.");
+      const message = error.message || "No se pudo transcribir el audio digital con Whisper local.";
+      setSpeechErrorNotice(
+        message.includes("Unable to decode audio data")
+          ? "El navegador seguia usando el decodificador anterior. Recarga la pagina con Ctrl+F5 y vuelve a activar Whisper."
+          : message
+      );
     } finally {
       digitalLiveBusyRef.current = false;
       setIsDigitalLiveTranscribing(false);
@@ -411,6 +423,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       await warmupBrowserWhisper();
       digitalLivePcmChunksRef.current = [];
       digitalLivePcmSampleCountRef.current = 0;
+      digitalLivePeakRef.current = 0;
+      digitalLiveDebugLastUpdateRef.current = 0;
+      setDigitalAudioDebug("Whisper listo. Esperando audio de la pestana...");
       digitalLiveLastFlushRef.current = 0;
     } else {
       await flushDigitalLiveTranscript(true);
@@ -446,6 +461,22 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
           copy.set(input);
           digitalLivePcmChunksRef.current.push(copy);
           digitalLivePcmSampleCountRef.current += copy.length;
+
+          let peak = digitalLivePeakRef.current;
+          for (let i = 0; i < input.length; i += 1) {
+            const value = Math.abs(input[i]);
+            if (value > peak) peak = value;
+          }
+          digitalLivePeakRef.current = peak;
+
+          const now = Date.now();
+          if (now - digitalLiveDebugLastUpdateRef.current > 1000) {
+            digitalLiveDebugLastUpdateRef.current = now;
+            const seconds = digitalLivePcmSampleCountRef.current / digitalLiveSampleRateRef.current;
+            const signal = peak > 0.01 ? "senal detectada" : "sin senal audible";
+            setDigitalAudioDebug(`${seconds.toFixed(1)}s PCM capturados · ${signal}`);
+            digitalLivePeakRef.current = 0;
+          }
 
           flushDigitalLiveTranscript(false);
         };
@@ -1531,18 +1562,25 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                         </div>
                         <div className="flex items-center gap-2">
                           {captureSource === "screen" && (
-                            <button
-                              type="button"
-                              onClick={toggleDigitalLiveTranscription}
-                              className={`px-2.5 py-1 rounded-lg border text-[9px] font-extrabold uppercase tracking-wider transition-colors ${
-                                digitalLiveEnabled
-                                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                                  : "bg-slate-50 border-slate-200 text-slate-500"
-                              }`}
-                              title="Activar o pausar Whisper en vivo dentro de la web"
-                            >
-                              Whisper {digitalLiveEnabled ? "ON" : "OFF"}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {digitalAudioDebug && (
+                                <span className="hidden sm:inline text-[9px] font-bold text-slate-400">
+                                  {digitalAudioDebug}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={toggleDigitalLiveTranscription}
+                                className={`px-2.5 py-1 rounded-lg border text-[9px] font-extrabold uppercase tracking-wider transition-colors ${
+                                  digitalLiveEnabled
+                                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                    : "bg-slate-50 border-slate-200 text-slate-500"
+                                }`}
+                                title="Activar o pausar Whisper en vivo dentro de la web"
+                              >
+                                Whisper {digitalLiveEnabled ? "ON" : "OFF"}
+                              </button>
+                            </div>
                           )}
                           <span className="text-[10px] bg-[#135bf1]/5 border border-[#135bf1]/10 px-2 py-0.5 rounded-md font-bold text-[#135bf1]">
                             {draftWordCount} palabras
