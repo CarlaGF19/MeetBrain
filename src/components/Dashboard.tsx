@@ -123,8 +123,7 @@ export default function Dashboard({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <QuickAction icon={Mic} label="Grabar clase" onClick={() => goRecorder("record")} />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <QuickAction icon={Upload} label="Subir audio" onClick={() => goRecorder("upload")} />
           <QuickAction icon={FolderOpen} label="Abrir Explore" onClick={() => setActiveTab("meetings")} />
           <QuickAction icon={KeyRound} label="Configurar Gemini" onClick={() => setActiveTab("settings")} />
