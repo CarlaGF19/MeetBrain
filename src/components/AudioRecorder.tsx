@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
 import { isBrowserWhisperSupported, transcribePcmInBrowser, warmupBrowserWhisper } from "../lib/browserWhisper";
 import { cleanTextForExport } from "../lib/textCleanup";
+import { buildAcademicTranscriptSegments } from "../lib/transcriptSegments";
 
 interface AudioRecorderProps {
   onTranscriptionSuccess: (transcription: { id?: string; title: string; transcript: string; summary: string }, durationSec: number) => void;
@@ -1241,7 +1242,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 18;
+    const margin = 20;
     const footerY = pageHeight - 12;
     const contentBottom = pageHeight - 24;
     const maxLineWidth = pageWidth - margin * 2;
@@ -1249,17 +1250,72 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     let yPosition = 24;
 
     const drawPageBackground = () => {
-      // Top accent bar overlay
-      doc.setFillColor(44, 94, 173); // #2C5EAD
-      doc.rect(0, 0, pageWidth, 4, "F");
+      doc.setFillColor(19, 91, 241);
+      doc.rect(0, 0, pageWidth, 3, "F");
 
       // Footer
       doc.setFont("Helvetica", "normal");
       doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text("Grabacion sincronizada en vivo | Olli", margin, footerY);
+      doc.setTextColor(145, 152, 166);
+      doc.text("Olli | Transcripcion academica", margin, footerY);
       const pageNum = doc.getNumberOfPages();
       doc.text(`Pag. ${pageNum}`, pageWidth - margin - 15, footerY);
+    };
+
+    const checkPageOverflow = (neededHeight: number) => {
+      if (yPosition + neededHeight > contentBottom) {
+        doc.addPage();
+        drawPageBackground();
+        yPosition = 22;
+      }
+    };
+
+    const writeMetaPill = (label: string, value: string, x: number, y: number) => {
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(115, 128, 150);
+      doc.text(label.toUpperCase(), x, y);
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(42, 52, 70);
+      doc.text(value, x, y + 5);
+    };
+
+    const writeHeading = (text: string) => {
+      checkPageOverflow(10);
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(74, 92, 120);
+      doc.text(text.toUpperCase(), margin, yPosition);
+      yPosition += 7;
+    };
+
+    const writeSegment = (label: string, timestamp: string, text: string) => {
+      const lines = doc.splitTextToSize(text, maxLineWidth - 18);
+      const blockHeight = Math.max(16, lines.length * 4.6 + 9);
+      checkPageOverflow(blockHeight);
+
+      doc.setFillColor(19, 91, 241);
+      doc.circle(margin + 4, yPosition + 2, 3, "F");
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(5.5);
+      doc.setTextColor(255, 255, 255);
+      doc.text(String(label.replace("Segmento ", "")), margin + 3.2, yPosition + 3.5);
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(34, 45, 64);
+      doc.text(label, margin + 12, yPosition + 1);
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(timestamp, margin + 36, yPosition + 1);
+
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(9.4);
+      doc.setTextColor(31, 41, 55);
+      doc.text(lines, margin + 12, yPosition + 7);
+      yPosition += blockHeight;
     };
 
     drawPageBackground();
@@ -1267,40 +1323,36 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     // Title
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(18);
-    doc.setTextColor(26, 37, 58);
+    doc.setTextColor(17, 17, 17);
     doc.text("Borrador transcrito en vivo", margin, yPosition);
-    yPosition += 10;
+    yPosition += 12;
 
     // Metadata
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(120, 120, 120);
     const m = Math.floor(duration / 60);
     const s = duration % 60;
     const liveDurationFormatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    doc.text(`Fecha: ${new Date().toLocaleDateString()} | Duracion: ${liveDurationFormatted}`, margin, yPosition);
-    yPosition += 12;
+    writeMetaPill("Fecha", new Date().toLocaleDateString(), margin, yPosition);
+    writeMetaPill("Duracion", liveDurationFormatted, margin + 54, yPosition);
+    writeMetaPill("Fuente", captureSource === "screen" ? "Audio digital" : "Microfono", margin + 98, yPosition);
+    yPosition += 14;
 
     // Line separator
-    doc.setDrawColor(230, 230, 230);
+    doc.setDrawColor(235, 238, 244);
+    doc.setLineWidth(0.4);
     doc.line(margin, yPosition, pageWidth - margin, yPosition);
     yPosition += 10;
 
-    // Body text
+    writeHeading("Transcripcion");
     doc.setFont("Helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(60, 60, 60);
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+    const note = "Documento generado sin identificacion automatica de hablantes. Los bloques se organizan por tiempo para facilitar lectura y revision.";
+    const noteLines = doc.splitTextToSize(note, maxLineWidth);
+    doc.text(noteLines, margin, yPosition);
+    yPosition += noteLines.length * 4.5 + 7;
 
-    const textLines = doc.splitTextToSize(textToPrint, maxLineWidth);
-    for (const line of textLines) {
-      if (yPosition > contentBottom) {
-        doc.addPage();
-        drawPageBackground();
-        yPosition = 22;
-      }
-      doc.text(line, margin, yPosition);
-      yPosition += 5.4;
-    }
+    const segments = buildAcademicTranscriptSegments(textToPrint, duration, 120);
+    segments.forEach((segment) => writeSegment(segment.label, segment.timestamp, segment.text));
 
     doc.save(`Olli_Borrador_Sincronizado_${Date.now()}.pdf`);
   };

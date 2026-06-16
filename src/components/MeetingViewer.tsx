@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Meeting, MeetingFolder } from "../types";
 import { formatInUTC5 } from "../lib/dateUtils";
 import { cleanTextForExport } from "../lib/textCleanup";
+import { buildAcademicTranscriptSegments } from "../lib/transcriptSegments";
 import { jsPDF } from "jspdf";
 import {
   FileText,
@@ -372,7 +373,7 @@ ${meeting.transcript}
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 18;
+    const margin = 20;
     const footerY = pageHeight - 12;
     const contentBottom = pageHeight - 24;
     const maxLineWidth = pageWidth - margin * 2;
@@ -390,13 +391,13 @@ ${meeting.transcript}
     const drawPageBackground = () => {
       // Top accent bar
       doc.setFillColor(19, 91, 241); // Olli style Blue
-      doc.rect(0, 0, pageWidth, 4, "F");
+      doc.rect(0, 0, pageWidth, 3, "F");
 
       // Footer
       doc.setFont("Helvetica", "normal");
       doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text(`Olli AI Report | ${meeting.title}`.slice(0, 92), margin, footerY);
+      doc.setTextColor(145, 152, 166);
+      doc.text(`Olli | Transcripcion academica`.slice(0, 92), margin, footerY);
       const pageNum = doc.getNumberOfPages();
       doc.text(`Pag. ${pageNum}`, pageWidth - margin - 15, footerY);
     };
@@ -404,10 +405,10 @@ ${meeting.transcript}
     const writeHeading = (text: string) => {
       checkPageOverflow(12);
       doc.setFont("Helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(19, 91, 241);
+      doc.setFontSize(10);
+      doc.setTextColor(74, 92, 120);
       doc.text(text.toUpperCase(), margin, yPosition);
-      yPosition += 8;
+      yPosition += 7;
     };
 
     const writeParagraphs = (text: string) => {
@@ -417,15 +418,54 @@ ${meeting.transcript}
       }
 
       doc.setFont("Helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(48, 56, 72);
+      doc.setFontSize(9.6);
+      doc.setTextColor(39, 48, 66);
 
       paragraphs.forEach((paragraph) => {
         const lines = doc.splitTextToSize(paragraph, maxLineWidth);
-        checkPageOverflow(lines.length * 5.3 + 3);
+        checkPageOverflow(lines.length * 5.1 + 3);
         doc.text(lines, margin, yPosition);
-        yPosition += lines.length * 5.3 + 3;
+        yPosition += lines.length * 5.1 + 3;
       });
+    };
+
+    const writeMetaPill = (label: string, value: string, x: number, y: number) => {
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(115, 128, 150);
+      doc.text(label.toUpperCase(), x, y);
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(42, 52, 70);
+      doc.text(value, x, y + 5);
+    };
+
+    const writeSegment = (label: string, timestamp: string, text: string) => {
+      const lines = doc.splitTextToSize(text, maxLineWidth - 18);
+      const blockHeight = Math.max(16, lines.length * 4.6 + 9);
+      checkPageOverflow(blockHeight);
+
+      doc.setFillColor(19, 91, 241);
+      doc.circle(margin + 4, yPosition + 2, 3, "F");
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(5.5);
+      doc.setTextColor(255, 255, 255);
+      doc.text(String(label.replace("Segmento ", "")), margin + 3.2, yPosition + 3.5);
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(34, 45, 64);
+      doc.text(label, margin + 12, yPosition + 1);
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(timestamp, margin + 36, yPosition + 1);
+
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(9.4);
+      doc.setTextColor(31, 41, 55);
+      doc.text(lines, margin + 12, yPosition + 7);
+      yPosition += blockHeight;
     };
 
     drawPageBackground();
@@ -436,38 +476,51 @@ ${meeting.transcript}
     doc.setTextColor(17, 17, 17);
     const titleLines = doc.splitTextToSize(meeting.title, maxLineWidth);
     doc.text(titleLines, margin, yPosition);
-    yPosition += (titleLines.length * 7.5) + 4;
+    yPosition += (titleLines.length * 7.5) + 6;
 
     // Subheader / Metadata
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 130);
-    const dateStr = `Fecha: ${formatInUTC5(meeting.date, "datetime")} (UTC-5)`;
-    const durationStr = `Duracion: ${meeting.duration}`;
-    doc.text(`${dateStr}   |   ${durationStr}`, margin, yPosition);
-    yPosition += 8;
+    const dateStr = `${formatInUTC5(meeting.date, "datetime")} (UTC-5)`;
+    const durationStr = meeting.duration || "00:00";
+    writeMetaPill("Fecha", dateStr, margin, yPosition);
+    writeMetaPill("Duracion", durationStr, margin + 72, yPosition);
+    writeMetaPill("Fuente", "Transcripcion local", margin + 116, yPosition);
+    yPosition += 14;
 
     // Horizontal line separator
     doc.setDrawColor(242, 242, 242);
     doc.setLineWidth(0.5);
     doc.line(margin, yPosition, pageWidth - margin, yPosition);
-    yPosition += 12;
+    yPosition += 10;
 
-    const summary = cleanTextForExport(meeting.summary, {
-      fallback: "Borrador guardado localmente. Genera un resumen con IA cuando tengas una transcripcion estable.",
-      maxWords: 900,
-    });
+    const rawSummary = (meeting.summary || "").trim();
+    const lowerSummary = rawSummary.toLowerCase();
+    const hasUsefulSummary = Boolean(rawSummary)
+      && !lowerSummary.includes("borrador guardado en tiempo real")
+      && !lowerSummary.includes("audio digital capturado localmente")
+      && !lowerSummary.includes("genera un resumen con ia");
+    const summary = hasUsefulSummary ? cleanTextForExport(rawSummary, { maxWords: 900 }) : "";
     const transcript = cleanTextForExport(meeting.transcript, {
       fallback: "(Sin transcripcion disponible)",
       maxWords: 4500,
     });
 
-    writeHeading("Resumen");
-    writeParagraphs(summary);
+    if (summary) {
+      writeHeading("Resumen");
+      writeParagraphs(summary);
+      yPosition += 3;
+    }
 
-    yPosition += 3;
     writeHeading("Transcripcion");
-    writeParagraphs(transcript);
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+    const note = "Documento generado sin identificacion automatica de hablantes. Los bloques se organizan por tiempo para facilitar lectura y revision.";
+    const noteLines = doc.splitTextToSize(note, maxLineWidth);
+    doc.text(noteLines, margin, yPosition);
+    yPosition += noteLines.length * 4.5 + 7;
+
+    const segments = buildAcademicTranscriptSegments(transcript, meeting.duration, 120);
+    segments.forEach((segment) => writeSegment(segment.label, segment.timestamp, segment.text));
 
     return doc;
   };
