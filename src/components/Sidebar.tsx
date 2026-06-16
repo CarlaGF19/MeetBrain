@@ -9,7 +9,6 @@ import {
   Home,
   MessageSquare,
   Compass,
-  Cpu,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -23,8 +22,8 @@ import {
 
 interface SidebarProps {
   user: User;
-  activeTab: "dashboard" | "recorder" | "meetings" | "settings" | "integrations";
-  setActiveTab: (tab: "dashboard" | "recorder" | "meetings" | "settings" | "integrations") => void;
+  activeTab: "dashboard" | "recorder" | "meetings" | "settings";
+  setActiveTab: (tab: "dashboard" | "recorder" | "meetings" | "settings") => void;
   onLogout: () => void;
   favoritesCount: number;
   meetings: Meeting[];
@@ -87,11 +86,6 @@ export default function Sidebar({
       id: "meetings" as const,
       label: "Explore",
       icon: Compass,
-    },
-    {
-      id: "integrations" as const,
-      label: "Integrations",
-      icon: Cpu,
     },
     {
       id: "settings" as const,

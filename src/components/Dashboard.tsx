@@ -21,7 +21,7 @@ import {
 interface DashboardProps {
   meetings: Meeting[];
   settings: AppSettings;
-  setActiveTab: (tab: "dashboard" | "recorder" | "meetings" | "settings" | "integrations") => void;
+  setActiveTab: (tab: "dashboard" | "recorder" | "meetings" | "settings") => void;
   setRecorderMode?: (mode: "record" | "upload") => void;
 }
 

@@ -12,7 +12,7 @@ import AudioRecorder from "./components/AudioRecorder";
 import MeetingViewer from "./components/MeetingViewer";
 import SettingsPanel from "./components/SettingsPanel";
 import OnboardingScreen from "./components/OnboardingScreen";
-import { Brain, Menu, X, LayoutDashboard, Mic, FolderOpen, Settings, LogOut, Cpu } from "lucide-react";
+import { Brain, Menu, X, LayoutDashboard, Mic, FolderOpen, Settings, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   fetchUserMeetings,
@@ -96,7 +96,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
 
   // Active workspace page
-  const [activeTab, setActiveTab] = useState<"dashboard" | "recorder" | "meetings" | "settings" | "integrations">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "recorder" | "meetings" | "settings">("dashboard");
   const [preselectedRecorderMode, setPreselectedRecorderMode] = useState<"record" | "upload">("record");
 
   // Meetings and Settings state
@@ -534,7 +534,6 @@ export default function App() {
                   { id: "dashboard" as const, label: "Home", icon: LayoutDashboard },
                   { id: "recorder" as const, label: "Olli AI Chat", icon: Mic },
                   { id: "meetings" as const, label: "Explore", icon: FolderOpen },
-                  { id: "integrations" as const, label: "Integrations", icon: Cpu },
                   { id: "settings" as const, label: "Settings", icon: Settings },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -629,14 +628,6 @@ export default function App() {
                 />
               )}
 
-              {activeTab === "integrations" && (
-                <SettingsPanel
-                  settings={settings}
-                  onSaveSettings={handleSaveSettings}
-                  defaultTab="integrations"
-                  onDeleteAccount={handleDeleteAccount}
-                />
-              )}
             </motion.div>
           </AnimatePresence>
         </main>
