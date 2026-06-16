@@ -677,21 +677,21 @@ ${meeting.transcript}
       // Headers
       if (trimmed.startsWith("###")) {
         return (
-          <h4 key={idx} className="text-xs font-bold text-[#111111] tracking-wide uppercase mt-4 mb-2">
+          <h4 key={idx} className="text-[11px] font-semibold text-slate-700 tracking-wide uppercase mt-3 mb-1.5">
             {trimmed.replace(/^###\s*/, "")}
           </h4>
         );
       }
       if (trimmed.startsWith("##")) {
         return (
-          <h3 key={idx} className="text-sm font-bold text-[#111111] border-b border-slate-100 pb-1.5 mt-6 mb-3">
+          <h3 key={idx} className="text-[13px] font-semibold text-slate-800 border-b border-slate-100 pb-1.5 mt-4 mb-2">
             {trimmed.replace(/^##\s*/, "")}
           </h3>
         );
       }
       if (trimmed.startsWith("#")) {
         return (
-          <h2 key={idx} className="text-lg font-black text-[#135bf1] mt-6 mb-4 font-sans tracking-tight">
+          <h2 key={idx} className="text-sm font-semibold text-[#135bf1] mt-4 mb-2 font-sans tracking-tight">
             {trimmed.replace(/^#\s*/, "")}
           </h2>
         );
@@ -710,7 +710,7 @@ ${meeting.transcript}
               readOnly
               className="mt-1 h-3.5 w-3.5 rounded border-slate-300 text-[#135bf1] focus:ring-[#135bf1] shrink-0"
             />
-            <span className={`text-[12px] leading-relaxed ${checked ? "text-slate-400 line-through" : "text-slate-750"}`}>
+            <span className={`text-[12px] leading-6 ${checked ? "text-slate-400 line-through" : "text-slate-750"}`}>
               {text}
             </span>
           </div>
@@ -720,7 +720,7 @@ ${meeting.transcript}
       // Standard Unordered Lists
       if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
         return (
-          <li key={idx} className="text-[12px] text-slate-750 leading-relaxed my-1.5 list-disc pl-1 ml-4">
+          <li key={idx} className="text-[12px] text-slate-750 leading-6 my-1 list-disc pl-1 ml-4">
             {trimmed.replace(/^[-*]\s+/, "")}
           </li>
         );
@@ -728,7 +728,7 @@ ${meeting.transcript}
 
       // Empty Lines
       if (trimmed === "") {
-        return <div key={idx} className="h-2" />;
+        return <div key={idx} className="h-1.5" />;
       }
 
       // Bold text replacements
@@ -755,7 +755,7 @@ ${meeting.transcript}
       }
 
       return (
-        <p key={idx} className="text-[12px] text-slate-655 leading-relaxed my-1.5">
+        <p key={idx} className="text-[12px] text-slate-655 leading-6 my-1">
           {parts.length > 0 ? parts : trimmed}
         </p>
       );
@@ -763,11 +763,11 @@ ${meeting.transcript}
   };
 
   return (
-    <div className="flex h-[calc(100vh-96px)] gap-3 select-none font-sans relative overflow-hidden">
+    <div className="flex h-[calc(100vh-72px)] gap-3 select-none font-sans relative overflow-hidden">
       
       {/* 2. Interactive Double Pane (Main Workspace & Ask Olli AI Column) */}
       <div id="notes_workspace" className="flex-grow min-w-0 bg-white border border-[#E9E9EB] rounded-2xl flex flex-col overflow-hidden shadow-sm">
-        <div className="px-6 py-2 border-b border-[#E9E9EB] bg-white flex flex-wrap items-center justify-between gap-2">
+        <div className="px-5 py-2 border-b border-[#E9E9EB] bg-white flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <select
               value={selectedFolderFilter}
@@ -838,7 +838,7 @@ ${meeting.transcript}
             {/* Left Pane - Document text and media */}
             <div className="flex-grow flex flex-col h-full min-w-0 border-r border-[#E9E9EB] relative">
               {/* Doc Workspace header controls */}
-              <div className="p-6 border-b border-[#E9E9EB] bg-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="px-5 py-3 border-b border-[#E9E9EB] bg-white flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
                 <div className="flex-grow min-w-0">
                   {isEditingTitle ? (
                     <div className="flex items-center space-x-2">
@@ -863,27 +863,17 @@ ${meeting.transcript}
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => goToAdjacentMeeting(-1)}
-                        disabled={selectedMeetingIndex <= 0}
-                        className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-[#E9E9EB] bg-white text-slate-500 hover:text-[#135bf1] hover:border-[#135bf1]/20 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
-                        title="Reunion anterior"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-
                       <div className="relative min-w-0 max-w-full">
                         <button
                           type="button"
                           onClick={() => setIsMeetingMenuOpen((open) => !open)}
-                          className="group flex max-w-[min(560px,calc(100vw-760px))] min-w-[260px] items-center gap-2 rounded-xl border border-transparent px-1 py-1 text-left hover:border-[#E9E9EB] hover:bg-slate-50 transition-colors"
+                          className="group flex max-w-[min(520px,calc(100vw-720px))] min-w-[220px] items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 text-left hover:border-[#E9E9EB] hover:bg-slate-50 transition-colors"
                           title="Cambiar de borrador o transcripcion"
                         >
-                          <span className="truncate text-2xl font-black text-[#111111] tracking-tight leading-snug group-hover:text-[#135bf1]">
+                          <span className="truncate text-lg font-semibold text-[#111111] tracking-tight leading-snug group-hover:text-[#135bf1]">
                             {selectedMeeting.title}
                           </span>
-                          <ChevronRight className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${isMeetingMenuOpen ? "-rotate-90" : "rotate-90"}`} />
+                          <ChevronRight className={`w-3.5 h-3.5 shrink-0 text-slate-400 transition-transform ${isMeetingMenuOpen ? "-rotate-90" : "rotate-90"}`} />
                         </button>
 
                         <AnimatePresence>
@@ -958,31 +948,41 @@ ${meeting.transcript}
                         </AnimatePresence>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => goToAdjacentMeeting(1)}
-                        disabled={selectedMeetingIndex < 0 || selectedMeetingIndex >= filteredMeetings.length - 1}
-                        className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-[#E9E9EB] bg-white text-slate-500 hover:text-[#135bf1] hover:border-[#135bf1]/20 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
-                        title="Siguiente reunion"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-
-                      <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-black text-slate-500">
-                        {selectedMeetingIndex >= 0 ? selectedMeetingIndex + 1 : 0} de {filteredMeetings.length}
-                      </span>
+                      <div className="inline-flex items-center gap-1 rounded-xl border border-[#E9E9EB] bg-white p-1">
+                        <button
+                          type="button"
+                          onClick={() => goToAdjacentMeeting(-1)}
+                          disabled={selectedMeetingIndex <= 0}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50 hover:text-[#135bf1] disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+                          title="Reunion anterior"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="px-2 text-[10px] font-semibold text-slate-500 whitespace-nowrap">
+                          {selectedMeetingIndex >= 0 ? selectedMeetingIndex + 1 : 0} de {filteredMeetings.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => goToAdjacentMeeting(1)}
+                          disabled={selectedMeetingIndex < 0 || selectedMeetingIndex >= filteredMeetings.length - 1}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50 hover:text-[#135bf1] disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+                          title="Siguiente reunion"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
 
                       <button
                         type="button"
                         onClick={() => startEditTitle(selectedMeeting)}
-                        className="rounded-lg px-2 py-1 text-[11px] font-bold text-slate-400 hover:bg-slate-50 hover:text-[#135bf1] transition-colors"
+                        className="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-400 hover:bg-slate-50 hover:text-[#135bf1] transition-colors"
                       >
                         Editar
                       </button>
                     </div>
                   )}
                   
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-3 font-semibold">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 mt-2 font-medium">
                     <span className="flex items-center">
                       <Calendar className="w-3.5 h-3.5 mr-1" />
                       {formatInUTC5(selectedMeeting.date, "datetime")} (UTC-5)
@@ -1019,10 +1019,10 @@ ${meeting.transcript}
                 </div>
 
                 {/* Toolbar widgets */}
-                <div className="flex items-center space-x-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => onToggleFavorite(selectedMeeting.id)}
-                    className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                    className={`h-8 w-8 inline-flex items-center justify-center rounded-lg border transition-colors cursor-pointer ${
                       selectedMeeting.isFavorite
                         ? "bg-[#135bf1]/5 border-slate-100 text-[#135bf1]"
                         : "bg-white border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-600"
@@ -1033,21 +1033,21 @@ ${meeting.transcript}
                   </button>
                   <button
                     onClick={() => handleExportMarkdown(selectedMeeting)}
-                    className="p-2 rounded-xl bg-white border border-[#E9E9EB] hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+                    className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-white border border-[#E9E9EB] hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
                     title="Exportar Markdown"
                   >
                     <Download className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleExportPDF(selectedMeeting)}
-                    className="p-2 rounded-xl bg-white border border-[#E9E9EB] hover:bg-emerald-55 text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer"
+                    className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-white border border-[#E9E9EB] hover:bg-emerald-55 text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer"
                     title="Descargar PDF"
                   >
                     <FileText className="w-3.5 h-3.5 text-emerald-500" />
                   </button>
                   <button
                     onClick={() => setIsChatPanelOpen(!isChatPanelOpen)}
-                    className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                    className={`h-8 w-8 inline-flex items-center justify-center rounded-lg border transition-colors cursor-pointer ${
                       isChatPanelOpen
                         ? "bg-[#135bf1]/5 border-[#135bf1]/15 text-[#135bf1]"
                         : "bg-white border-[#E9E9EB] text-slate-500 hover:text-[#135bf1]"
@@ -1065,7 +1065,7 @@ ${meeting.transcript}
                       setEmailSuccess(null);
                       setEmailError("");
                     }}
-                    className="px-3.5 py-1.5 rounded-full bg-[#135bf1] hover:bg-[#0746cc] text-white flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer transition-all active:scale-95"
+                    className="h-8 px-3 rounded-full bg-[#135bf1] hover:bg-[#0746cc] text-white flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer transition-all active:scale-95"
                     title="Compartir meeting note via E-mail"
                   >
                     <Mail className="w-3.5 h-3.5" />
@@ -1074,7 +1074,7 @@ ${meeting.transcript}
                   
                   <button
                     onClick={() => onDeleteMeeting(selectedMeeting.id)}
-                    className="p-2 rounded-xl bg-white border border-[#E9E9EB] hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                    className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-white border border-[#E9E9EB] hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
                     title="Delete File"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -1119,13 +1119,13 @@ ${meeting.transcript}
 
               {/* Display document area */}
               <div className="flex-grow overflow-y-auto bg-white relative">
-                <div className="sticky top-0 z-10 bg-white border-b border-[#E9E9EB] px-6 pt-2">
+                <div className="sticky top-0 z-10 bg-white border-b border-[#E9E9EB] px-5 pt-1">
                   <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-5">
                       <button
                         type="button"
                         onClick={() => setActiveDocTab("transcript")}
-                        className={`py-4 text-sm font-bold border-b-2 transition-colors ${
+                        className={`py-3 text-[13px] font-semibold border-b-2 transition-colors ${
                           activeDocTab === "transcript"
                             ? "border-[#135bf1] text-[#111111]"
                             : "border-transparent text-slate-500 hover:text-[#111111]"
@@ -1136,7 +1136,7 @@ ${meeting.transcript}
                       <button
                         type="button"
                         onClick={() => setActiveDocTab("summary")}
-                        className={`py-4 text-sm font-bold border-b-2 transition-colors ${
+                        className={`py-3 text-[13px] font-semibold border-b-2 transition-colors ${
                           activeDocTab === "summary"
                             ? "border-[#135bf1] text-[#111111]"
                             : "border-transparent text-slate-500 hover:text-[#111111]"
@@ -1146,19 +1146,19 @@ ${meeting.transcript}
                       </button>
                     </div>
                     {activeDocTab === "summary" && (
-                      <span className="text-xs font-bold text-slate-700">Template: General</span>
+                      <span className="text-[11px] font-semibold text-slate-500">Template: General</span>
                     )}
                   </div>
                 </div>
 
-                <div className="px-6 py-8 max-w-4xl">
+                <div className="px-5 py-5 max-w-4xl">
                   {activeDocTab === "transcript" ? (
                     <section className="text-left">
-                      <div className="flex items-center gap-3 mb-6">
-                        <FileText className="w-4 h-4 text-[#135bf1]" />
-                        <h2 className="text-xl font-black text-slate-900">Transcription</h2>
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="w-3.5 h-3.5 text-[#135bf1]" />
+                        <h2 className="text-base font-semibold text-slate-900">Transcription</h2>
                       </div>
-                      <div className="font-sans text-slate-800 leading-8 text-[15px] whitespace-pre-wrap font-medium space-y-3 text-left [text-wrap:pretty]">
+                      <div className="font-sans text-slate-800 leading-7 text-[14px] whitespace-pre-wrap font-normal space-y-2 text-left [text-wrap:pretty]">
                         {selectedMeeting.transcript ? (
                           cleanTextForExport(selectedMeeting.transcript, { fallback: "", maxWords: 8000 })
                             .split("\n")
@@ -1178,12 +1178,12 @@ ${meeting.transcript}
                                         {speaker}
                                       </span>
                                     </div>
-                                    <p className="text-sm text-slate-700 text-left flex-grow leading-7">{utterance}</p>
+                                    <p className="text-[13px] text-slate-700 text-left flex-grow leading-6">{utterance}</p>
                                   </div>
                                 );
                               }
                               return (
-                                <p key={idx} className="text-sm text-slate-700 text-left leading-8">
+                                <p key={idx} className="text-[14px] text-slate-700 text-left leading-7">
                                   {line}
                                 </p>
                               );
@@ -1196,15 +1196,15 @@ ${meeting.transcript}
                       </div>
                     </section>
                   ) : (
-                    <section className="text-left space-y-8">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-5">
+                    <section className="text-left space-y-5">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3">
                         <div>
-                          <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                            <Sparkles className="w-5 h-5 text-[#135bf1]" />
+                          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-[#135bf1]" />
                             Summary
                           </h2>
-                          <p className="text-sm text-slate-600 leading-6 mt-2 max-w-2xl">
-                            Activa el analisis para generar Overview, Action Items y Outlines desde la transcripcion. Esta accion usa Gemini y consume cuota/API.
+                          <p className="text-xs text-slate-600 leading-5 mt-1 max-w-2xl">
+                            Genera Overview, Action Items y Outlines desde la transcripcion. Usa Gemini y consume cuota/API.
                           </p>
                           {summarizationError && (
                             <p className="text-[11px] text-rose-600 font-semibold mt-2 bg-white p-2 rounded-lg border border-rose-100">
@@ -1216,7 +1216,7 @@ ${meeting.transcript}
                           type="button"
                           onClick={() => handleSummarizeDraftText(selectedMeeting)}
                           disabled={isSummarizing || !selectedMeeting.transcript}
-                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="inline-flex items-center justify-center gap-2 h-9 px-3.5 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-lg text-[11px] font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isSummarizing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                           <span>{isSummarizing ? "Analizando..." : "Analizar con IA"}</span>
@@ -1231,12 +1231,12 @@ ${meeting.transcript}
                         };
                         const content = getSummarySections(selectedMeeting)[sectionKey];
                         return (
-                          <div key={sectionKey} className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              {sectionKey === "overview" ? <BookOpen className="w-4 h-4 text-[#135bf1]" /> : sectionKey === "actions" ? <UserCheck className="w-4 h-4 text-emerald-600" /> : <Filter className="w-4 h-4 text-slate-600" />}
-                              <h3 className="text-lg font-black text-slate-900">{labels[sectionKey]}</h3>
+                          <div key={sectionKey} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              {sectionKey === "overview" ? <BookOpen className="w-3.5 h-3.5 text-[#135bf1]" /> : sectionKey === "actions" ? <UserCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Filter className="w-3.5 h-3.5 text-slate-600" />}
+                              <h3 className="text-base font-semibold text-slate-900">{labels[sectionKey]}</h3>
                             </div>
-                            <div className="pl-7 text-[15px] leading-8 text-slate-700">
+                            <div className="pl-6 text-[13px] leading-6 text-slate-700">
                               {renderMarkdown(content)}
                             </div>
                           </div>
@@ -1255,19 +1255,19 @@ ${meeting.transcript}
                 <motion.aside
                   id="olli_assistant_column"
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 380, opacity: 1 }}
+                  animate={{ width: 360, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{ type: "tween", duration: 0.2 }}
-                  className="bg-white flex flex-col h-full min-w-0 shrink-0 border-l border-[#E5E7EB] overflow-hidden"
+                  className="bg-white flex flex-col h-full min-w-[340px] shrink-0 border-l border-[#E5E7EB] overflow-hidden"
                 >
-                  <div className="h-16 px-5 border-b border-[#E5E7EB] flex items-center justify-between bg-white">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-[#135bf1]/10 flex items-center justify-center shrink-0">
-                        <Sparkles className="w-4 h-4 text-[#135bf1]" />
+                  <div className="h-14 px-4 border-b border-[#E5E7EB] flex items-center justify-between bg-white">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-[#135bf1]/10 flex items-center justify-center shrink-0">
+                        <Sparkles className="w-3.5 h-3.5 text-[#135bf1]" />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-black text-[#111111] tracking-tight">New chat</span>
+                          <span className="text-[13px] font-semibold text-[#111111] tracking-tight">New chat</span>
                           <ChevronRight className="w-3.5 h-3.5 text-slate-400 rotate-90" />
                         </div>
                         <p className="text-[11px] text-slate-500 truncate">
@@ -1284,27 +1284,27 @@ ${meeting.transcript}
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-white">
-                    <div className="space-y-3">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
+                    <div className="space-y-2">
                       {assistantPrompts.map((prompt) => (
                         <button
                           key={prompt}
                           type="button"
                           onClick={() => handleQueryOlliChat(prompt)}
                           disabled={isGeneratingChat}
-                          className="w-full rounded-3xl bg-[#F4F4F5] hover:bg-[#ECEEF2] px-5 py-4 text-left text-[13px] leading-5 font-black text-[#111111] transition-colors disabled:opacity-50"
+                          className="w-full rounded-2xl bg-[#F4F4F5] hover:bg-[#ECEEF2] px-4 py-3 text-left text-[12px] leading-5 font-semibold text-[#111111] transition-colors disabled:opacity-50"
                         >
                           {prompt}
                         </button>
                       ))}
                     </div>
 
-                    <div className="space-y-4 pt-1">
+                    <div className="space-y-3 pt-1">
                       {conversations[selectedMeeting.id]?.map((msg, idx) => {
                         const isAI = msg.role === "model";
                         return (
                           <div key={idx} className={`flex items-start gap-3 ${isAI ? "" : "flex-row-reverse"}`}>
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 border select-none ${
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center font-semibold text-[10px] shrink-0 border select-none ${
                               isAI
                                 ? "bg-[#135bf1]/8 border-[#135bf1]/15 text-[#135bf1]"
                                 : "bg-[#F5F2EB] border-[#E2E0D8] text-slate-700"
@@ -1312,7 +1312,7 @@ ${meeting.transcript}
                               {isAI ? "AI" : "Tu"}
                             </div>
                             <div className={`max-w-[82%] ${isAI ? "text-left" : "text-right"}`}>
-                              <div className={`px-4 py-3 rounded-2xl text-[13px] leading-6 ${
+                              <div className={`px-3.5 py-2.5 rounded-2xl text-[12px] leading-5 ${
                                 isAI
                                   ? "bg-white border border-[#E5E7EB] text-slate-800"
                                   : "bg-[#135bf1] text-white"
@@ -1350,8 +1350,8 @@ ${meeting.transcript}
                     </div>
                   </div>
 
-                  <div className="border-t border-[#E5E7EB] bg-white p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3 rounded-t-2xl bg-blue-50 px-4 py-2 text-[11px] text-slate-600">
+                  <div className="border-t border-[#E5E7EB] bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-blue-50 px-3 py-2 text-[10.5px] text-slate-600">
                       <span className="font-semibold">Tu chat es privado. Las respuestas usan Gemini y consumen API.</span>
                     </div>
                     <form
@@ -1361,11 +1361,11 @@ ${meeting.transcript}
                           handleQueryOlliChat(userChatMessage.trim());
                         }
                       }}
-                      className="rounded-2xl border border-[#CBD5E1] bg-white p-4 shadow-sm"
+                      className="rounded-2xl border border-[#CBD5E1] bg-white p-3 shadow-sm"
                     >
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="inline-flex w-8 h-8 items-center justify-center rounded-full border border-[#E5E7EB] text-slate-500">@</span>
-                        <span className="max-w-[210px] truncate rounded-full border border-[#E5E7EB] px-3 py-1.5 text-[11px] font-bold text-slate-700">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="inline-flex w-7 h-7 items-center justify-center rounded-full border border-[#E5E7EB] text-slate-500">@</span>
+                        <span className="max-w-[210px] truncate rounded-full border border-[#E5E7EB] px-3 py-1.5 text-[10.5px] font-semibold text-slate-700">
                           {selectedMeeting.title}
                         </span>
                       </div>
@@ -1375,7 +1375,7 @@ ${meeting.transcript}
                         placeholder="Ask anything about your conversations"
                         disabled={isGeneratingChat}
                         rows={2}
-                        className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder-slate-400 outline-none"
+                        className="w-full resize-none bg-transparent text-[13px] text-[#111111] placeholder-slate-400 outline-none"
                       />
                       <div className="flex items-center justify-between pt-2">
                         <button
