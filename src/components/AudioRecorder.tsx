@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { Mic, Square, Play, Pause, UploadCloud, FileAudio, AlertCircle, Sparkles, Brain, Tv, Volume2, FileDown, Check, Send, HelpCircle, GraduationCap, Search, ArrowRight, Loader2, Cpu } from "lucide-react";
+import { Mic, Square, Play, Pause, UploadCloud, FileAudio, AlertCircle, Sparkles, Brain, Tv, Volume2, FileDown, Check, Send, HelpCircle, GraduationCap, Search, ArrowRight, Loader2, Cpu, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
 import { isBrowserWhisperSupported, transcribePcmInBrowser, warmupBrowserWhisper } from "../lib/browserWhisper";
@@ -1318,6 +1318,21 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       .join(":");
   };
 
+  const cleanLiveTranscriptForDisplay = (text: string) => (
+    text
+      .replace(/\[(?:m[uú]sica|music|audio|sonido|silencio)\]/gi, "")
+      .replace(/[♪♫]+/g, "")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trimStart()
+  );
+
+  const visibleLiveTranscript = cleanLiveTranscriptForDisplay(liveTranscript);
+  const visibleInterimTranscript = cleanLiveTranscriptForDisplay(interimTranscript);
+  const visibleWordCount = visibleLiveTranscript.trim()
+    ? visibleLiveTranscript.trim().split(/\s+/).filter(Boolean).length
+    : draftWordCount;
+
   const getFriendlyErrorMessage = (message: string) => {
     const raw = message || "";
     const lower = raw.toLowerCase();
@@ -1708,8 +1723,9 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                       </div>
 
                       {/* Timer Clock */}
-                      <div className="text-xs font-bold text-[#2C5EAD] tracking-wider font-mono bg-slate-50 px-2.5 py-0.5 rounded-lg border border-slate-100/65">
-                        ⏱️ {formatTimer(duration)}
+                      <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#2C5EAD] tracking-wider font-mono bg-slate-50 px-2.5 py-0.5 rounded-lg border border-slate-100/65">
+                        <Clock className="w-3.5 h-3.5 text-[#2C5EAD]" />
+                        <span>{formatTimer(duration)}</span>
                       </div>
                     </div>
 
@@ -1744,7 +1760,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                             </div>
                           )}
                           <span className="text-[10px] bg-[#135bf1]/5 border border-[#135bf1]/10 px-2 py-0.5 rounded-md font-bold text-[#135bf1]">
-                            {draftWordCount} palabras
+                            {visibleWordCount} palabras
                           </span>
                         </div>
                       </div>
@@ -1756,14 +1772,23 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                         style={{ height: "clamp(360px, 52vh, 560px)", maxHeight: "560px", minHeight: "360px" }}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 rounded-full bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center font-bold text-xs shrink-0 select-none">
-                            {captureSource === "screen" ? "🔊" : "🎙️"}
+                          <div className="w-9 h-9 rounded-xl bg-[#135bf1]/8 border border-[#135bf1]/15 flex items-center justify-center shrink-0 select-none">
+                            {captureSource === "screen" ? (
+                              <Volume2 className="w-4.5 h-4.5 text-[#135bf1]" />
+                            ) : (
+                              <Mic className="w-4.5 h-4.5 text-[#135bf1]" />
+                            )}
                           </div>
                           
                           <div className="flex-grow min-w-0 bg-white border border-[#E9E9EB] p-4 rounded-xl shadow-3xs">
-                            <p className="text-[9.5px] font-extrabold text-[#135bf1] uppercase tracking-widest mb-1.5 leading-none">
-                              Canal de Audio Directo / Clase
-                            </p>
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                              <p className="text-[9.5px] font-extrabold text-[#135bf1] uppercase tracking-widest leading-none">
+                                Canal de audio directo
+                              </p>
+                              <span className="text-[9px] font-bold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
+                                {captureSource === "screen" ? "Audio digital" : "Microfono"}
+                              </span>
+                            </div>
                             
                             <div className="text-[15px] text-slate-800 font-normal leading-7 font-sans whitespace-pre-wrap select-text animate-fade-in">
                               {speechErrorNotice && (
@@ -1772,17 +1797,19 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                   <span className="flex-1">{speechErrorNotice}</span>
                                 </div>
                               )}
-                              {captureSource === "screen" && liveTranscript ? (
+                              {captureSource === "screen" && visibleLiveTranscript ? (
                                 <div className="space-y-2 bg-transparent pr-1">
                                   <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg text-[9.5px] font-bold text-emerald-700 uppercase tracking-wider mb-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                     <span>Transcripcion local en vivo</span>
                                   </div>
-                                  <div className="text-slate-800 font-normal whitespace-pre-wrap text-justify [text-wrap:pretty]">{liveTranscript}</div>
+                                  <div className="text-slate-800 font-normal whitespace-pre-wrap text-justify [text-wrap:pretty]">{visibleLiveTranscript}</div>
                                 </div>
                               ) : captureSource === "screen" ? (
                                 <div className="text-slate-500 text-left py-12 flex flex-col items-center justify-center space-y-3 mt-4 px-4">
-                                  <span className="text-3xl animate-pulse">💻🔊</span>
+                                  <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shadow-3xs">
+                                    <Volume2 className="w-6 h-6 text-[#135bf1]" />
+                                  </div>
                                   <span className="text-xs font-bold text-[#2C5EAD] uppercase tracking-wider">
                                     {isDigitalLiveTranscribing ? "Transcribiendo segmento..." : "Capturando audio digital"}
                                   </span>
@@ -1792,16 +1819,18 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                                       : "La app esta grabando el audio localmente. Activa Whisper si necesitas ver palabras durante la captura."}
                                   </span>
                                 </div>
-                              ) : liveTranscript || interimTranscript ? (
+                              ) : visibleLiveTranscript || visibleInterimTranscript ? (
                                 <div className="space-y-1 bg-transparent pr-1">
-                                  <span className="text-slate-800 font-normal text-justify [text-wrap:pretty]">{liveTranscript}</span>
-                                  {interimTranscript && (
-                                    <span className="text-slate-400 italic font-medium"> {interimTranscript}</span>
+                                  <span className="text-slate-800 font-normal text-justify [text-wrap:pretty]">{visibleLiveTranscript}</span>
+                                  {visibleInterimTranscript && (
+                                    <span className="text-slate-400 italic font-medium"> {visibleInterimTranscript}</span>
                                   )}
                                 </div>
                               ) : (
                                 <div className="text-slate-400 italic text-left py-12 flex flex-col items-center justify-center space-y-2 mt-4">
-                                  <span className="text-xl animate-bounce">💬</span>
+                                  <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+                                    <Mic className="w-5 h-5 text-slate-400" />
+                                  </div>
                                   <span className="text-[11px] font-medium text-slate-400">
                                     Habla para ver la transcripción en vivo aquí...
                                   </span>
