@@ -17,6 +17,9 @@ interface AudioRecorderProps {
   initialMode?: "record" | "upload";
 }
 
+const MAX_RECORDING_SECONDS = 2 * 60 * 60;
+const RECORDING_WARNING_SECONDS = MAX_RECORDING_SECONDS - 10 * 60;
+
 export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpdateDraft, initialMode }: AudioRecorderProps) {
   // Tabs: "record" or "upload"
   const [activeMode, setActiveMode] = useState<"record" | "upload">(initialMode || "record");
@@ -32,6 +35,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const [isPaused, setIsPaused] = useState(false);
   const [duration, setDuration] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
+  const [longSessionNotice, setLongSessionNotice] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
   const [captureSource, setCaptureSource] = useState<"mic" | "screen">("mic");
@@ -263,6 +267,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
   const digitalLiveEnabledRef = useRef(false);
 
   const durationRef = useRef(0);
+  const warningNotificationSentRef = useRef(false);
+  const maxDurationStopSentRef = useRef(false);
   const captureSourceRef = useRef<"mic" | "screen">("mic");
 
   useEffect(() => {
@@ -341,6 +347,90 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       } catch (e) {}
       recognitionRef.current = null;
     }
+  };
+
+  const requestDesktopNotificationPermission = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      try {
+        await Notification.requestPermission();
+      } catch (err) {
+        console.warn("Desktop notification permission request failed:", err);
+      }
+    }
+  };
+
+  const showRecordingDesktopNotice = (title: string, body: string) => {
+    setLongSessionNotice(body);
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+
+    try {
+      new Notification(title, {
+        body,
+        tag: "olli-recording-limit",
+        requireInteraction: true,
+      });
+    } catch (err) {
+      console.warn("Desktop notification failed:", err);
+    }
+  };
+
+  const syncDraftTick = (next: number) => {
+    if (next % 1200 === 0 && onUpdateDraft && currentDraftIdRef.current) {
+      setIsSyncingDraft(true);
+      const m = Math.floor(next / 60);
+      const s = next % 60;
+      const liveDurationFormatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      onUpdateDraft({
+        id: currentDraftIdRef.current,
+        title: `Borrador en Vivo: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+        transcript: liveTranscriptRef.current || "(Silencio grabado...)",
+        summary: "### Borrador Guardado en Tiempo Real\n\nEste es un borrador auto-guardado mientras hablabas. Si la transcripción del audio pesado falla, puedes usar la opción de IA para resumir este borrador de texto directamente en tu bóveda.",
+        duration: liveDurationFormatted,
+        isDraft: true,
+        date: new Date().toISOString()
+      });
+      setTimeout(() => {
+        setIsSyncingDraft(false);
+      }, 800);
+    }
+  };
+
+  const handleRecordingDurationLimit = (next: number) => {
+    if (next >= RECORDING_WARNING_SECONDS && !warningNotificationSentRef.current) {
+      warningNotificationSentRef.current = true;
+      showRecordingDesktopNotice(
+        "Olli: quedan 10 minutos",
+        "Quedan 10 minutos. Para clases más largas, crea una nueva grabación."
+      );
+    }
+
+    if (next >= MAX_RECORDING_SECONDS && !maxDurationStopSentRef.current) {
+      maxDurationStopSentRef.current = true;
+      showRecordingDesktopNotice(
+        "Olli guardó la grabación",
+        "La grabación alcanzó el límite de 2 horas y se guardará automáticamente."
+      );
+      setTimeout(() => {
+        if (stopRecordingRef.current) {
+          stopRecordingRef.current();
+        }
+      }, 0);
+    }
+  };
+
+  const startRecordingTimer = () => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = setInterval(() => {
+      setDuration((prev) => {
+        const next = prev + 1;
+        durationRef.current = next;
+        syncDraftTick(next);
+        handleRecordingDurationLimit(next);
+        return next;
+      });
+    }, 1000);
   };
 
   const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -624,9 +714,12 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     stopTracksAndTimers();
 
     setErrorMessage("");
+    setLongSessionNotice("");
     setSpeechErrorNotice(null);
     setDuration(0);
     durationRef.current = 0;
+    warningNotificationSentRef.current = false;
+    maxDurationStopSentRef.current = false;
     sessionFinalTranscriptRef.current = "";
     liveTranscriptRef.current = "";
     setLiveTranscript("");
@@ -652,6 +745,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     }
 
     try {
+      await requestDesktopNotificationPermission();
+
       let stream: MediaStream;
       if (captureSource === "screen") {
         try {
@@ -835,33 +930,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         );
       }
 
-      // Setup active ticking counter
-      timerIntervalRef.current = setInterval(() => {
-        setDuration((prev) => {
-          const next = prev + 1;
-          durationRef.current = next;
-          // Synchronize to the cloud every 20 minutes (20 * 60 = 1200 seconds)
-          if (next % 1200 === 0 && onUpdateDraft && currentDraftIdRef.current) {
-            setIsSyncingDraft(true);
-            const m = Math.floor(next / 60);
-            const s = next % 60;
-            const liveDurationFormatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-            onUpdateDraft({
-              id: currentDraftIdRef.current,
-              title: `Borrador en Vivo: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-              transcript: liveTranscriptRef.current || "(Silencio grabado...)",
-              summary: "### Borrador Guardado en Tiempo Real\n\nEste es un borrador auto-guardado mientras hablabas. Si la transcripción del audio pesado falla, puedes usar la opción de IA para resumir este borrador de texto directamente en tu bóveda.",
-              duration: liveDurationFormatted,
-              isDraft: true,
-              date: new Date().toISOString()
-            });
-            setTimeout(() => {
-              setIsSyncingDraft(false);
-            }, 800);
-          }
-          return next;
-        });
-      }, 1000);
+      startRecordingTimer();
 
     } catch (err: any) {
       console.error("Acoustic setup failed:", err);
@@ -882,15 +951,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
         mediaRecorderRef.current.resume();
         isPausedRef.current = false;
         setIsPaused(false);
-        // Resume timer
-        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = setInterval(() => {
-          setDuration((prev) => {
-            const next = prev + 1;
-            durationRef.current = next;
-            return next;
-          });
-        }, 1000);
+        startRecordingTimer();
         // Resume SpeechRecognition
         if (recognitionRef.current) {
           try {
@@ -1389,6 +1450,23 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
                   </button>
                 </div>
               )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {longSessionNotice && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl text-xs font-semibold text-amber-900 flex items-start space-x-3 text-left"
+          >
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 leading-relaxed">
+              <span className="font-black">Aviso de clase larga: </span>
+              {longSessionNotice}
             </div>
           </motion.div>
         )}
