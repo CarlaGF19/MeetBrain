@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { User, Meeting } from "../types";
+import { AppNotification, User } from "../types";
 import {
   Home,
   MessageSquare,
@@ -15,7 +15,7 @@ import {
   Bell,
   LogOut,
   FolderHeart,
-  Settings
+  Settings,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -24,7 +24,7 @@ interface SidebarProps {
   setActiveTab: (tab: "dashboard" | "recorder" | "meetings" | "settings") => void;
   onLogout: () => void;
   favoritesCount: number;
-  meetings: Meeting[];
+  notifications: AppNotification[];
   isCollapsed: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
 }
@@ -35,39 +35,27 @@ export default function Sidebar({
   setActiveTab,
   onLogout,
   favoritesCount,
-  meetings,
+  notifications,
   isCollapsed,
   setIsCollapsed,
 }: SidebarProps) {
-  const displayName = user.displayName || "Carla Acha";
-  const userEmail = user.email || "carlita.ai19.20@gmail.com";
+  const displayName = user.displayName || "Usuario Olli";
+  const userEmail = user.email || "cuenta local";
 
   const [showNotifications, setShowNotifications] = useState(false);
-  const [hasUnread, setHasUnread] = useState(true);
+  const [seenNotificationSignature, setSeenNotificationSignature] = useState("");
+  const notificationSignature = notifications
+    .map((notification) => `${notification.id}:${notification.title}:${notification.description}`)
+    .join("|");
+  const hasUnread = Boolean(notificationSignature) && notificationSignature !== seenNotificationSignature && notifications.some((notification) => notification.unread);
 
-  const mockNotifications = [
-    {
-      id: "1",
-      title: "API Key de Gemini Activa",
-      description: "Tu integración con Google GenAI está lista y configurada.",
-      time: "Hace 5 min",
-      unread: true
-    },
-    {
-      id: "2",
-      title: "Borrador de Clase Guardado",
-      description: "Se guardó una copia de seguridad local de tu última sesión.",
-      time: "Hace 2 horas",
-      unread: true
-    },
-    {
-      id: "3",
-      title: "Bienvenido a Olli",
-      description: "Comienza a grabar para transcribir y resumir tus clases con IA.",
-      time: "Ayer",
-      unread: false
+  const toggleNotifications = () => {
+    const nextState = !showNotifications;
+    setShowNotifications(nextState);
+    if (nextState) {
+      setSeenNotificationSignature(notificationSignature);
     }
-  ];
+  };
 
   const navItems = [
     {
@@ -87,7 +75,7 @@ export default function Sidebar({
     },
     {
       id: "settings" as const,
-      label: "Configuración",
+      label: "Configuracion",
       icon: Settings,
     },
   ];
@@ -99,30 +87,30 @@ export default function Sidebar({
         isCollapsed ? "w-[72px]" : "w-[260px]"
       }`}
     >
-      {/* Collapse/Expand Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="absolute top-7 -right-3 w-6 h-6 bg-white border border-[#E9E9EB] rounded-full shadow-sm flex items-center justify-center text-slate-400 hover:text-[#135bf1] hover:border-[#135bf1]/20 hover:bg-[#135bf1]/5 transition-all cursor-pointer z-30 focus:outline-none"
-        title={isCollapsed ? "Expandir navegación" : "Contraer navegación"}
+        title={isCollapsed ? "Expandir navegacion" : "Contraer navegacion"}
       >
         {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
       </button>
 
-      {/* Floating Notifications Dropdown */}
       {showNotifications && (
         <>
           <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setShowNotifications(false)} />
-          <div 
-            className={`absolute bg-white/95 backdrop-blur-md border border-[#E9E9EB] rounded-2xl shadow-xl z-50 flex flex-col ${
-              isCollapsed 
-                ? "left-[76px] top-16 w-[300px]"
-                : "right-4 top-16 w-[320px]"
+          <div
+            className={`absolute bg-white/95 backdrop-blur-md border border-[#E9E9EB] rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden ${
+              isCollapsed
+                ? "left-[76px] top-16 w-[320px]"
+                : "right-4 top-16 w-[340px]"
             }`}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-3.5 border-b border-[#E9E9EB] bg-slate-50/50 rounded-t-2xl">
-              <span className="text-xs font-bold text-[#111111] uppercase tracking-wider">Notificaciones</span>
-              <button 
+            <div className="flex items-center justify-between p-3.5 border-b border-[#E9E9EB] bg-slate-50/60">
+              <div>
+                <span className="text-xs font-bold text-[#111111] uppercase tracking-wider">Notificaciones</span>
+                <p className="text-[10px] text-slate-500 mt-0.5">Estado real de tu espacio local.</p>
+              </div>
+              <button
                 onClick={() => setShowNotifications(false)}
                 className="text-[10px] text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
               >
@@ -130,31 +118,32 @@ export default function Sidebar({
               </button>
             </div>
 
-            {/* List */}
-            <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100 py-1">
-              {mockNotifications.map((notif) => (
-                <div key={notif.id} className="p-3 text-left hover:bg-slate-50 transition-colors">
-                  <div className="flex items-start justify-between gap-1.5">
-                    <p className="text-xs font-bold text-[#111111] leading-snug">{notif.title}</p>
-                    {notif.unread && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#FF4D4F] mt-1 shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-[#666666] mt-0.5 leading-normal">{notif.description}</p>
-                  <p className="text-[9px] text-slate-400 mt-1">{notif.time}</p>
+            <div className="max-h-[320px] overflow-y-auto divide-y divide-slate-100 py-1">
+              {notifications.length === 0 ? (
+                <div className="p-4 text-left">
+                  <p className="text-xs font-semibold text-[#111111]">Sin novedades por ahora</p>
+                  <p className="text-[10px] text-slate-500 mt-1 leading-normal">Cuando haya borradores, pendientes o cambios importantes apareceran aqui.</p>
                 </div>
-              ))}
+              ) : (
+                notifications.map((notification) => (
+                  <div key={notification.id} className="p-3 text-left hover:bg-slate-50 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-bold text-[#111111] leading-snug">{notification.title}</p>
+                      <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${getNotificationDot(notification)}`} />
+                    </div>
+                    <p className="text-[10px] text-[#666666] mt-0.5 leading-normal">{notification.description}</p>
+                    <p className="text-[9px] text-slate-400 mt-1">{notification.time}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </>
       )}
 
       <div className="flex flex-col flex-grow overflow-y-auto">
-        
-        {/* Brand Header */}
         <div className={`pt-5 pb-3 flex flex-col items-center gap-3 ${isCollapsed ? "px-2" : "px-5"}`}>
           <div className="w-full flex items-center justify-between">
-            {/* Logo */}
             <button
               type="button"
               onClick={() => setActiveTab("dashboard")}
@@ -183,13 +172,9 @@ export default function Sidebar({
               )}
             </button>
 
-            {/* Bell Button (Only when expanded) */}
             {!isCollapsed && (
-              <button 
-                onClick={() => {
-                  setShowNotifications(!showNotifications);
-                  setHasUnread(false);
-                }}
+              <button
+                onClick={toggleNotifications}
                 className="h-9 w-9 inline-flex items-center justify-center hover:bg-white hover:shadow-sm rounded-xl text-slate-500 transition-colors relative cursor-pointer"
                 title="Notificaciones"
               >
@@ -199,13 +184,9 @@ export default function Sidebar({
             )}
           </div>
 
-          {/* Bell Button (Only when collapsed, placed below logo) */}
           {isCollapsed && (
-            <button 
-              onClick={() => {
-                setShowNotifications(!showNotifications);
-                setHasUnread(false);
-              }}
+            <button
+              onClick={toggleNotifications}
               className="h-10 w-10 inline-flex items-center justify-center hover:bg-white hover:shadow-sm rounded-2xl text-slate-500 transition-colors relative cursor-pointer"
               title="Notificaciones"
             >
@@ -215,7 +196,6 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Profile Card Switcher */}
         <div className={`${isCollapsed ? "px-2 flex justify-center pb-3" : "px-3 pb-3"}`}>
           {isCollapsed ? (
             <div className="w-10 h-10 rounded-2xl bg-white border border-[#E9E9EB] overflow-hidden flex items-center justify-center text-slate-700 font-semibold text-xs shrink-0 select-none cursor-pointer hover:border-[#135bf1]/25 hover:shadow-sm transition-all" title={displayName}>
@@ -237,7 +217,6 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Navigation List */}
         <nav className={`space-y-1 border-t border-[#EFEFF1] pt-3 ${isCollapsed ? "px-2" : "px-3"}`}>
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -277,22 +256,8 @@ export default function Sidebar({
             );
           })}
         </nav>
-
-        {/* Channels Section */}
-        {!isCollapsed && (
-          <div className="px-3 mb-6">
-            <div className="flex items-center justify-between px-3 mb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider select-none">
-              <span>Channels</span>
-              <span className="cursor-pointer hover:text-slate-600">+</span>
-            </div>
-            <button className="w-full text-left px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-white hover:shadow-sm rounded-lg transition-colors cursor-pointer block">
-              # General
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Sidebar Footer */}
       <div className={`space-y-2 border-t border-[#EFEFF1] bg-white/45 ${isCollapsed ? "p-2" : "p-3"}`}>
         {!isCollapsed && (
           <div className="bg-white rounded-2xl p-3 border border-[#E9E9EB] relative overflow-hidden text-left">
@@ -308,15 +273,30 @@ export default function Sidebar({
 
         <button
           onClick={onLogout}
-          title={isCollapsed ? "Cerrar sesión" : undefined}
+          title={isCollapsed ? "Cerrar sesion" : undefined}
           className={`w-full flex items-center text-rose-500 hover:bg-rose-50/80 font-semibold transition-colors cursor-pointer group mt-1 ${
             isCollapsed ? "justify-center h-10 rounded-2xl" : "gap-2.5 px-3 py-2 rounded-xl text-xs text-left"
           }`}
         >
           <LogOut className="w-4 h-4 text-rose-450 group-hover:translate-x-0.5 transition-transform shrink-0" />
-          {!isCollapsed && <span>Cerrar sesión</span>}
+          {!isCollapsed && <span>Cerrar sesion</span>}
         </button>
       </div>
     </aside>
   );
+}
+
+function getNotificationDot(notification: AppNotification) {
+  if (!notification.unread) return "bg-slate-200";
+
+  switch (notification.tone) {
+    case "success":
+      return "bg-emerald-500";
+    case "warning":
+      return "bg-amber-500";
+    case "danger":
+      return "bg-rose-500";
+    default:
+      return "bg-[#135bf1]";
+  }
 }

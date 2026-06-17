@@ -35,24 +35,22 @@ export default function Dashboard({
   const drafts = meetings.filter((meeting) => meeting.isDraft).length;
   const processed = totalMeetings - drafts;
   const withoutFolder = meetings.filter((meeting) => !meeting.folderId).length;
-  const withoutSummary = meetings.filter((meeting) => {
-    const summary = meeting.summary.trim().toLowerCase();
-    return !summary || summary.includes("borrador guardado en tiempo real") || summary.includes("audio digital capturado localmente");
-  }).length;
+  const withoutSummary = meetings.filter((meeting) => isPlaceholderSummary(meeting.summary)).length;
+  const withAiSummary = meetings.filter((meeting) => !isPlaceholderSummary(meeting.summary)).length;
   const hasApiKey = Boolean(settings.hasApiKey);
 
   const cards = [
     {
       title: "Reuniones transcritas",
       value: String(totalMeetings),
-      detail: `${processed} procesadas · ${drafts} borradores`,
+      detail: `${processed} procesadas - ${drafts} borradores`,
       icon: FileAudio,
       tone: "blue",
     },
     {
-      title: "Uso de Gemini",
-      value: "0",
-      detail: "0 solicitudes hoy · 0 tokens estimados",
+      title: "IA aplicada",
+      value: String(withAiSummary),
+      detail: `${withoutSummary} pendientes de resumen - tokens exactos no registrados`,
       icon: Bot,
       tone: "cyan",
     },
@@ -66,7 +64,7 @@ export default function Dashboard({
     {
       title: "Pendientes",
       value: String(withoutFolder + withoutSummary + drafts),
-      detail: `${withoutFolder} sin carpeta · ${withoutSummary} sin resumen · ${drafts} borradores`,
+      detail: `${withoutFolder} sin carpeta - ${withoutSummary} sin resumen - ${drafts} borradores`,
       icon: ListChecks,
       tone: "slate",
     },
@@ -78,11 +76,11 @@ export default function Dashboard({
   };
 
   return (
-    <div className="space-y-6 font-sans text-left max-w-6xl mx-auto pb-12 select-none">
+    <div className="space-y-5 font-sans text-left max-w-6xl mx-auto pb-10 select-none">
       <div className="flex flex-row items-center justify-between gap-4 pb-4 border-b border-[#EBEBEB]">
         <div>
-          <h1 className="text-xl font-bold text-[#111111] tracking-tight">Dashboard</h1>
-          <p className="text-[11px] text-slate-500 mt-0.5">Estado local de reuniones, pendientes y uso de IA.</p>
+          <h1 className="text-xl font-semibold text-[#111111] tracking-tight">Dashboard</h1>
+          <p className="text-[11px] text-slate-500 mt-0.5">Estado local de reuniones, pendientes y actividad de IA.</p>
         </div>
 
         <button
@@ -95,21 +93,21 @@ export default function Dashboard({
         </button>
       </div>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <article key={card.title} className="bg-white border border-[#E9E9EB] rounded-2xl p-5 shadow-sm">
+            <article key={card.title} className="bg-white border border-[#E9E9EB] rounded-2xl p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">{card.title}</p>
-                  <p className="text-3xl font-black text-[#111111] mt-3 tracking-tight">{card.value}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{card.title}</p>
+                  <p className="text-2xl font-semibold text-[#111111] mt-3 tracking-tight">{card.value}</p>
                 </div>
                 <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${getTone(card.tone)}`}>
                   <Icon className="w-5 h-5" />
                 </div>
               </div>
-              <p className="text-xs font-semibold text-slate-500 leading-relaxed mt-4">{card.detail}</p>
+              <p className="text-[11px] font-medium text-slate-500 leading-relaxed mt-4">{card.detail}</p>
             </article>
           );
         })}
@@ -118,7 +116,7 @@ export default function Dashboard({
       <section className="bg-white border border-[#E9E9EB] rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-sm font-black text-[#111111]">Acciones rapidas</h2>
+            <h2 className="text-sm font-semibold text-[#111111]">Acciones rapidas</h2>
             <p className="text-xs text-slate-500 mt-1">Abre lo importante sin convertir el dashboard en otra lista.</p>
           </div>
         </div>
@@ -170,4 +168,15 @@ function getTone(tone: string) {
     default:
       return "bg-slate-50 border-slate-100 text-slate-600";
   }
+}
+
+function isPlaceholderSummary(summary?: string) {
+  const clean = (summary || "").trim().toLowerCase();
+  return (
+    !clean ||
+    clean.includes("borrador guardado en tiempo real") ||
+    clean.includes("audio digital capturado localmente") ||
+    clean.includes("usa explore para generar resumen") ||
+    clean.includes("resumen generado automaticamente")
+  );
 }

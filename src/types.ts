@@ -39,3 +39,12 @@ export interface AppSettings {
   autoDeleteAudio: boolean;
   bypassSizeLimit?: boolean;
 }
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  description: string;
+  time: string;
+  unread?: boolean;
+  tone?: "info" | "success" | "warning" | "danger";
+}

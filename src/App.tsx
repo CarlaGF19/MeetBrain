@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { User, Meeting, AppSettings, MeetingFolder } from "./types";
+import { User, Meeting, AppSettings, MeetingFolder, AppNotification } from "./types";
 import LoginRegister from "./components/LoginRegister";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -470,6 +470,7 @@ export default function App() {
 
   // Counting favorites count
   const favoritesCount = meetings.filter((m) => m.isFavorite).length;
+  const workspaceNotifications = buildWorkspaceNotifications(meetings, settings);
 
   // Unauthenticated viewport route
   if (!user) {
@@ -491,7 +492,7 @@ export default function App() {
         }}
         onLogout={handleLogout}
         favoritesCount={favoritesCount}
-        meetings={meetings}
+        notifications={workspaceNotifications}
         isCollapsed={sidebarCollapsed}
         setIsCollapsed={setSidebarCollapsed}
       />
@@ -656,5 +657,100 @@ export default function App() {
       </AnimatePresence>
 
     </div>
+  );
+}
+
+function buildWorkspaceNotifications(meetings: Meeting[], settings: AppSettings): AppNotification[] {
+  const drafts = meetings.filter((meeting) => meeting.isDraft).length;
+  const withoutSummary = meetings.filter((meeting) => isPlaceholderSummary(meeting.summary)).length;
+  const withoutFolder = meetings.filter((meeting) => !meeting.folderId).length;
+  const withAiSummary = meetings.filter((meeting) => !isPlaceholderSummary(meeting.summary)).length;
+
+  const notifications: AppNotification[] = [
+    settings.hasApiKey
+      ? {
+          id: "api-ready",
+          title: "Gemini conectado",
+          description: "La API esta disponible para resumenes, acciones y respuestas del chat.",
+          time: "Ahora",
+          tone: "success",
+          unread: false,
+        }
+      : {
+          id: "api-missing",
+          title: "Gemini sin configurar",
+          description: "Puedes transcribir localmente, pero resumenes y chat necesitan una API key.",
+          time: "Pendiente",
+          tone: "warning",
+          unread: true,
+        },
+  ];
+
+  if (drafts > 0) {
+    notifications.push({
+      id: "drafts",
+      title: `${drafts} borrador${drafts === 1 ? "" : "es"} guardado${drafts === 1 ? "" : "s"}`,
+      description: "Hay capturas locales pendientes de revisar o completar en Explore.",
+      time: "Local",
+      tone: "info",
+      unread: true,
+    });
+  }
+
+  if (withoutSummary > 0) {
+    notifications.push({
+      id: "summary-pending",
+      title: `${withoutSummary} resumen${withoutSummary === 1 ? "" : "es"} pendiente${withoutSummary === 1 ? "" : "s"}`,
+      description: "Puedes generar resumen, puntos clave y acciones cuando decidas consumir Gemini.",
+      time: "Explore",
+      tone: "warning",
+      unread: true,
+    });
+  }
+
+  if (withoutFolder > 0) {
+    notifications.push({
+      id: "folder-pending",
+      title: `${withoutFolder} reunion${withoutFolder === 1 ? "" : "es"} sin carpeta`,
+      description: "Organizalas por curso o tema desde el selector de carpetas.",
+      time: "Explore",
+      tone: "info",
+      unread: true,
+    });
+  }
+
+  if (withAiSummary > 0) {
+    notifications.push({
+      id: "ai-applied",
+      title: `${withAiSummary} reunion${withAiSummary === 1 ? "" : "es"} con IA aplicada`,
+      description: "Olli detecto resumenes ya generados. Los tokens exactos aun no se registran.",
+      time: "Local",
+      tone: "success",
+      unread: false,
+    });
+  }
+
+  if (meetings.length === 0) {
+    notifications.push({
+      id: "empty-workspace",
+      title: "Tu espacio esta listo",
+      description: "Graba o sube audio para empezar a crear transcripciones locales.",
+      time: "Inicio",
+      tone: "info",
+      unread: false,
+    });
+  }
+
+  return notifications.slice(0, 5);
+}
+
+function isPlaceholderSummary(summary?: string) {
+  const clean = (summary || "").trim().toLowerCase();
+  return (
+    !clean ||
+    clean.includes("borrador guardado en tiempo real") ||
+    clean.includes("audio digital capturado localmente") ||
+    clean.includes("usa explore para generar resumen") ||
+    clean.includes("resumen generado automaticamente")
   );
 }
