@@ -56,12 +56,152 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const MAX_GENERAL_JSON_BYTES = 8 * 1024 * 1024;
+const MAX_AI_TEXT_CHARS = 180_000;
+const MAX_CHAT_HISTORY_MESSAGES = 12;
+const MAX_AUDIO_BASE64_BYTES = 42 * 1024 * 1024;
+const MAX_PDF_BASE64_BYTES = 10 * 1024 * 1024;
+const ALLOWED_AUDIO_MIME_TYPES = new Set([
+  "audio/webm",
+  "audio/webm;codecs=opus",
+  "audio/wav",
+  "audio/wave",
+  "audio/x-wav",
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/ogg;codecs=opus",
+]);
 
-// Set maximum request size to support larger audio file uploads
-app.use(express.json({ limit: "100mb" }));
-app.use(express.urlencoded({ limit: "100mb", extended: true }));
+app.disable("x-powered-by");
+if (IS_PRODUCTION) {
+  app.set("trust proxy", 1);
+}
+
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "camera=(), geolocation=(), payment=(), usb=()");
+  if (IS_PRODUCTION) {
+    res.setHeader("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
+  }
+  next();
+});
+
+// Keep ordinary API payloads small. Audio transcription is the only route allowed to send larger base64 data.
+app.use((req, res, next) => {
+  const limit = req.path === "/api/transcribe" ? "60mb" : "8mb";
+  return express.json({ limit })(req, res, next);
+});
+app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
 const SESSION_COOKIE = "mb_session";
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function getClientIp(req: express.Request) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return req.ip || req.socket.remoteAddress || "unknown";
+}
+
+function rateLimit(options: {
+  name: string;
+  windowMs: number;
+  max: number;
+  includeUser?: boolean;
+}) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const now = Date.now();
+    const user = (req as any).localUser as PublicLocalUser | undefined;
+    const identity = options.includeUser && user ? `user:${user.uid}` : `ip:${getClientIp(req)}`;
+    const key = `${options.name}:${identity}`;
+    const current = rateLimitBuckets.get(key);
+
+    if (!current || current.resetAt <= now) {
+      rateLimitBuckets.set(key, { count: 1, resetAt: now + options.windowMs });
+      return next();
+    }
+
+    if (current.count >= options.max) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((current.resetAt - now) / 1000));
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({
+        error: "Demasiadas peticiones. Espera un momento antes de intentarlo de nuevo.",
+      });
+    }
+
+    current.count += 1;
+    return next();
+  };
+}
+
+const authRateLimit = rateLimit({ name: "auth", windowMs: 15 * 60 * 1000, max: 20 });
+const resetPasswordRateLimit = rateLimit({ name: "reset-password", windowMs: 60 * 60 * 1000, max: 8 });
+const writeRateLimit = rateLimit({ name: "write", windowMs: 15 * 60 * 1000, max: 160, includeUser: true });
+const aiRateLimit = rateLimit({ name: "ai", windowMs: 60 * 60 * 1000, max: 30, includeUser: true });
+const transcribeRateLimit = rateLimit({ name: "transcribe", windowMs: 60 * 60 * 1000, max: 10, includeUser: true });
+const emailRateLimit = rateLimit({ name: "email", windowMs: 60 * 60 * 1000, max: 8, includeUser: true });
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of rateLimitBuckets.entries()) {
+    if (bucket.resetAt <= now) rateLimitBuckets.delete(key);
+  }
+}, 10 * 60 * 1000).unref();
+
+function validateJsonPayloadSize(req: express.Request, maxBytes = MAX_GENERAL_JSON_BYTES) {
+  const lengthHeader = req.headers["content-length"];
+  const length = typeof lengthHeader === "string" ? Number.parseInt(lengthHeader, 10) : 0;
+  if (Number.isFinite(length) && length > maxBytes) {
+    const error = new Error("La peticion es demasiado grande.");
+    (error as any).status = 413;
+    throw error;
+  }
+}
+
+function normalizeText(value: unknown, maxChars: number) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxChars);
+}
+
+function isProbablyBase64(value: string) {
+  return /^[A-Za-z0-9+/=\s]+$/.test(value);
+}
+
+function getBase64Bytes(value: string) {
+  const clean = value.replace(/\s/g, "");
+  return Math.floor((clean.length * 3) / 4);
+}
+
+function cleanBase64Payload(value: unknown, maxBytes: number) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw Object.assign(new Error("Faltan datos base64."), { status: 400 });
+  }
+  const raw = value.includes(";base64,") ? value.split(";base64,")[1] : value;
+  const clean = raw.replace(/\s/g, "");
+  if (!isProbablyBase64(clean)) {
+    throw Object.assign(new Error("El archivo enviado no tiene formato base64 valido."), { status: 400 });
+  }
+  if (getBase64Bytes(clean) > maxBytes) {
+    throw Object.assign(new Error("El archivo supera el limite permitido."), { status: 413 });
+  }
+  return clean;
+}
+
+function isValidEmail(value: unknown) {
+  return typeof value === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) && value.length <= 254;
+}
+
+function safeErrorMessage(error: any, fallback: string) {
+  if (IS_PRODUCTION) return fallback;
+  const message = typeof error?.message === "string" ? error.message : "";
+  return message.length > 220 ? `${message.slice(0, 220)}...` : message || fallback;
+}
 
 function readCookie(req: express.Request, name: string): string | null {
   const raw = req.headers.cookie;
@@ -74,18 +214,22 @@ function readCookie(req: express.Request, name: string): string | null {
 }
 
 function setSessionCookie(res: express.Response, token: string) {
-  const secure = process.env.NODE_ENV === "production";
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure,
+    secure: IS_PRODUCTION,
     path: "/",
     maxAge: 14 * 24 * 60 * 60 * 1000,
   });
 }
 
 function clearSessionCookie(res: express.Response) {
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  res.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: IS_PRODUCTION,
+    path: "/",
+  });
 }
 
 async function requireLocalUser(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -139,8 +283,9 @@ app.get("/api/health", (req, res) => {
 });
 
 // Local authentication and SQLite data routes
-app.post("/api/auth/register", async (req, res): Promise<any> => {
+app.post("/api/auth/register", authRateLimit, async (req, res): Promise<any> => {
   try {
+    validateJsonPayloadSize(req, 32 * 1024);
     const { username, email, password } = req.body;
     const result = await registerLocalUser(username || "", email || "", password || "");
     setSessionCookie(res, result.sessionToken);
@@ -153,8 +298,9 @@ app.post("/api/auth/register", async (req, res): Promise<any> => {
   }
 });
 
-app.post("/api/auth/login", async (req, res): Promise<any> => {
+app.post("/api/auth/login", authRateLimit, async (req, res): Promise<any> => {
   try {
+    validateJsonPayloadSize(req, 16 * 1024);
     const { identifier, password } = req.body;
     const result = await loginLocalUser(identifier || "", password || "");
     setSessionCookie(res, result.sessionToken);
@@ -176,8 +322,9 @@ app.get("/api/auth/me", async (req, res): Promise<any> => {
   return res.json({ user });
 });
 
-app.post("/api/auth/reset-password", async (req, res): Promise<any> => {
+app.post("/api/auth/reset-password", resetPasswordRateLimit, async (req, res): Promise<any> => {
   try {
+    validateJsonPayloadSize(req, 16 * 1024);
     const { identifier, recoveryCode, newPassword } = req.body;
     const result = await resetLocalPassword(identifier || "", recoveryCode || "", newPassword || "");
     clearSessionCookie(res);
@@ -192,19 +339,19 @@ app.get("/api/meetings", requireLocalUser, async (req, res): Promise<any> => {
   return res.json({ meetings: await listMeetings(user.uid) });
 });
 
-app.post("/api/meetings", requireLocalUser, async (req, res): Promise<any> => {
+app.post("/api/meetings", requireLocalUser, writeRateLimit, async (req, res): Promise<any> => {
   const user = (req as any).localUser as PublicLocalUser;
   await saveMeeting(user.uid, req.body);
   return res.json({ ok: true });
 });
 
-app.patch("/api/meetings/:id", requireLocalUser, async (req, res): Promise<any> => {
+app.patch("/api/meetings/:id", requireLocalUser, writeRateLimit, async (req, res): Promise<any> => {
   const user = (req as any).localUser as PublicLocalUser;
   await updateMeeting(user.uid, req.params.id, req.body);
   return res.json({ ok: true });
 });
 
-app.delete("/api/meetings/:id", requireLocalUser, async (req, res): Promise<any> => {
+app.delete("/api/meetings/:id", requireLocalUser, writeRateLimit, async (req, res): Promise<any> => {
   const user = (req as any).localUser as PublicLocalUser;
   await deleteMeeting(user.uid, req.params.id);
   return res.json({ ok: true });
@@ -215,8 +362,9 @@ app.get("/api/folders", requireLocalUser, async (req, res): Promise<any> => {
   return res.json({ folders: await listMeetingFolders(user.uid) });
 });
 
-app.post("/api/folders", requireLocalUser, async (req, res): Promise<any> => {
+app.post("/api/folders", requireLocalUser, writeRateLimit, async (req, res): Promise<any> => {
   try {
+    validateJsonPayloadSize(req, 16 * 1024);
     const user = (req as any).localUser as PublicLocalUser;
     const folder = await createMeetingFolder(user.uid, req.body?.name || "");
     return res.json({ folder });
@@ -225,7 +373,7 @@ app.post("/api/folders", requireLocalUser, async (req, res): Promise<any> => {
   }
 });
 
-app.delete("/api/folders/:id", requireLocalUser, async (req, res): Promise<any> => {
+app.delete("/api/folders/:id", requireLocalUser, writeRateLimit, async (req, res): Promise<any> => {
   const user = (req as any).localUser as PublicLocalUser;
   await deleteMeetingFolder(user.uid, req.params.id);
   return res.json({ ok: true });
@@ -236,13 +384,13 @@ app.get("/api/settings", requireLocalUser, async (req, res): Promise<any> => {
   return res.json({ settings: await getSettings(user.uid) });
 });
 
-app.put("/api/settings", requireLocalUser, async (req, res): Promise<any> => {
+app.put("/api/settings", requireLocalUser, writeRateLimit, async (req, res): Promise<any> => {
   const user = (req as any).localUser as PublicLocalUser;
   await saveSettings(user.uid, req.body);
   return res.json({ ok: true });
 });
 
-app.delete("/api/account", requireLocalUser, async (req, res): Promise<any> => {
+app.delete("/api/account", requireLocalUser, writeRateLimit, async (req, res): Promise<any> => {
   const user = (req as any).localUser as PublicLocalUser;
   await deleteAccount(user.uid);
   clearSessionCookie(res);
@@ -250,10 +398,10 @@ app.delete("/api/account", requireLocalUser, async (req, res): Promise<any> => {
 });
 
 // Transcribe and analyze audio
-app.post("/api/transcribe", requireLocalUser, async (req, res): Promise<any> => {
+app.post("/api/transcribe", requireLocalUser, transcribeRateLimit, async (req, res): Promise<any> => {
   try {
     const { audio, mimeType, promptOverride, liveDraftText } = req.body;
-    const liveDraft = typeof liveDraftText === "string" ? liveDraftText.trim() : "";
+    const liveDraft = normalizeText(liveDraftText, MAX_AI_TEXT_CHARS);
 
     if (!audio) {
       return res.status(400).json({ error: "Missing audio data in base64 format." });
@@ -316,7 +464,10 @@ app.post("/api/transcribe", requireLocalUser, async (req, res): Promise<any> => 
     }
 
     // Default MIME type if not provided
-    const cleanMimeType = mimeType || "audio/wav";
+    const cleanMimeType = typeof mimeType === "string" ? mimeType.trim().toLowerCase() : "audio/wav";
+    if (!ALLOWED_AUDIO_MIME_TYPES.has(cleanMimeType)) {
+      return res.status(400).json({ error: "Tipo de audio no permitido." });
+    }
     
     // Resolve which API key to use - request's configured key overrides process.env
     // Only use custom client key if it is non-empty and valid
@@ -331,11 +482,7 @@ app.post("/api/transcribe", requireLocalUser, async (req, res): Promise<any> => 
       },
     });
 
-    // Clean base64 pattern (remove prefix if present)
-    let cleanBase64 = audio;
-    if (audio.includes(";base64,")) {
-      cleanBase64 = audio.split(";base64,")[1];
-    }
+    const cleanBase64 = cleanBase64Payload(audio, MAX_AUDIO_BASE64_BYTES);
 
     const systemPrompt = `You are Olli, an elite AI tool designed to transcribe recordings and output gorgeous Notion & Obsidian styled meeting summaries.
 Analyze the audio file provided and generate the response in the language spoken in the audio.
@@ -346,9 +493,9 @@ Specifically, generate:
 2. Obsidian-style summary in the native spoken language, featuring chapters with duration timestamps, clean outlines, and bulleted checklist tasks like [ ] or [x] for clear action items.
 3. A short, creative title in the native spoken language summarizing the conversation.`;
 
-    let userPrompt = promptOverride || "Realiza una transcripción precisa de este audio y presenta notas estructuradas en el mismo idioma en que se habla (por defecto, español si el audio es en español).";
-    if (liveDraftText && liveDraftText.trim().length > 0) {
-      userPrompt += `\n\nReference Live Speech Draft for context and text correction:\n"""\n${liveDraftText}\n"""\nUse the above draft to correct spelling of names or terms, alignment, and format the official transcription with precise timestamps from the audio file.`;
+    let userPrompt = normalizeText(promptOverride, 20_000) || "Realiza una transcripción precisa de este audio y presenta notas estructuradas en el mismo idioma en que se habla.";
+    if (liveDraft.length > 0) {
+      userPrompt += `\n\nReference Live Speech Draft for context and text correction:\n"""\n${liveDraft}\n"""\nUse the above draft to correct spelling of names or terms, alignment, and format the official transcription with precise timestamps from the audio file.`;
     }
 
     const response = await ai.models.generateContent({
@@ -399,16 +546,18 @@ Specifically, generate:
 
   } catch (error: any) {
     console.error("Transcribe API Error Details:", error);
-    return res.status(500).json({
-      error: toFriendlyGeminiError(error) || "No se pudo transcribir el audio. Verifica tu API key de Gemini en Settings.",
+    return res.status(error.status || 500).json({
+      error: error.status
+        ? error.message
+        : toFriendlyGeminiError(error) || "No se pudo transcribir el audio. Verifica tu API key de Gemini en Settings.",
     });
   }
 });
 
 // Summarize a text transcript (lightweight and robust to bypass Vercel timeout errors)
-app.post("/api/summarize-text", requireLocalUser, async (req, res): Promise<any> => {
+app.post("/api/summarize-text", requireLocalUser, aiRateLimit, async (req, res): Promise<any> => {
   try {
-    const { transcript } = req.body;
+    const transcript = normalizeText(req.body?.transcript, MAX_AI_TEXT_CHARS);
 
     if (!transcript) {
       return res.status(400).json({ error: "No se proporcionó texto de transcripción para resumir." });
@@ -469,15 +618,17 @@ Specifically, generate:
   } catch (error: any) {
     console.error("Summarize-Text API Error:", error);
     return res.status(500).json({
-      error: error.message || "Failed to summarize text transcript.",
+      error: toFriendlyGeminiError(error) || "No se pudo resumir la transcripcion.",
     });
   }
 });
 
 // Interactive AI Chat Assistant for meeting notes answering questions about transcript
-app.post("/api/chat", requireLocalUser, async (req, res): Promise<any> => {
+app.post("/api/chat", requireLocalUser, aiRateLimit, async (req, res): Promise<any> => {
   try {
-    const { transcript, messages, userMessage } = req.body;
+    const transcript = normalizeText(req.body?.transcript, MAX_AI_TEXT_CHARS);
+    const userMessage = normalizeText(req.body?.userMessage, 4_000);
+    const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
 
     if (!transcript) {
       return res.status(400).json({ error: "No se proporcionó contexto de transcripción para chatear." });
@@ -509,10 +660,18 @@ ${transcript}
 """`;
 
     const geminiContents = [];
-    if (messages && messages.length > 0) {
-      for (const msg of messages) {
+    const safeMessages = rawMessages
+      .slice(-MAX_CHAT_HISTORY_MESSAGES)
+      .map((msg) => ({
+        role: msg?.role === "user" ? "user" : "model",
+        content: normalizeText(msg?.content, 4_000),
+      }))
+      .filter((msg) => msg.content);
+
+    if (safeMessages.length > 0) {
+      for (const msg of safeMessages) {
         geminiContents.push({
-          role: msg.role === "user" ? "user" : "model",
+          role: msg.role,
           parts: [{ text: msg.content }]
         });
       }
@@ -537,17 +696,18 @@ ${transcript}
   } catch (error: any) {
     console.error("Chat API Error:", error);
     return res.status(500).json({
-      error: error.message || "Failed to interact with the AI assistant."
+      error: toFriendlyGeminiError(error) || "No se pudo responder con Olli AI."
     });
   }
 });
 
 // Enviar reporte PDF y minuta por correo electrónico
-app.post("/api/send-email", async (req, res): Promise<any> => {
+app.post("/api/send-email", requireLocalUser, emailRateLimit, async (req, res): Promise<any> => {
   try {
+    validateJsonPayloadSize(req, 12 * 1024 * 1024);
     const { to, subject, body, pdfBase64, pdfFilename, title } = req.body;
 
-    if (!to) {
+    if (!isValidEmail(to)) {
       return res.status(400).json({ error: "Falta el destinatario (correo electrónico)" });
     }
 
@@ -571,7 +731,11 @@ app.post("/api/send-email", async (req, res): Promise<any> => {
       },
     });
 
-    const meetingTitle = title || "Reunion de Olli";
+    const meetingTitle = normalizeText(title, 160) || "Reunion de Olli";
+    const safeBody = normalizeText(body, 2_000);
+    const safeSubject = normalizeText(subject, 180) || `Resumen y Acta de Reunion: ${meetingTitle}`;
+    const safePdfFilename = normalizeText(pdfFilename, 160).replace(/[\\/:*?"<>|]+/g, "-") || "reunion.pdf";
+    const safeHtmlBody = safeBody.replace(/[<>&]/g, "").replace(/\n/g, "<br/>");
     const mailOptions: {
       from: string;
       to: string;
@@ -581,8 +745,8 @@ app.post("/api/send-email", async (req, res): Promise<any> => {
       attachments: any[];
     } = {
       from: senderAddress,
-      to,
-      subject: subject || `Resumen y Acta de Reunión: ${meetingTitle}`,
+      to: to.trim(),
+      subject: safeSubject,
       html: `
         <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #f1f5f9; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);">
           <div style="text-align: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
@@ -598,7 +762,7 @@ app.post("/api/send-email", async (req, res): Promise<any> => {
           <div style="background-color: #f8fafc; padding: 18px; border-radius: 12px; border: 1px solid #f1f5f9; margin: 24px 0;">
             <p style="margin: 0 0 8px 0; font-size: 11px; text-transform: uppercase; font-weight: 800; color: #64748b; letter-spacing: 0.05em;">Notas u observaciones de quien envía:</p>
             <p style="margin: 0; font-size: 14px; color: #0f172a; font-style: italic; line-height: 1.5;">
-              "${body ? body.replace(/\n/g, '<br/>') : 'No se incluyeron notas adicionales.'}"
+              "${safeHtmlBody || 'No se incluyeron notas adicionales.'}"
             </p>
           </div>
           
@@ -613,18 +777,15 @@ app.post("/api/send-email", async (req, res): Promise<any> => {
           </footer>
         </div>
       `,
-      text: `Olli Report: ${meetingTitle}\n\nAqui tienes el resumen y transcripcion de la reunion adjunta en PDF.\n\nObservaciones enviadas:\n"${body || 'N/A'}"\n\nEnviado desde Olli local.`,
+      text: `Olli Report: ${meetingTitle}\n\nAqui tienes el resumen y transcripcion de la reunion adjunta en PDF.\n\nObservaciones enviadas:\n"${safeBody || 'N/A'}"\n\nEnviado desde Olli local.`,
       attachments: [],
     };
 
     if (pdfBase64) {
-      let cleanBase64 = pdfBase64;
-      if (pdfBase64.includes(";base64,")) {
-        cleanBase64 = pdfBase64.split(";base64,")[1];
-      }
+      const cleanBase64 = cleanBase64Payload(pdfBase64, MAX_PDF_BASE64_BYTES);
       
       mailOptions.attachments.push({
-        filename: pdfFilename || "reunion.pdf",
+        filename: safePdfFilename.endsWith(".pdf") ? safePdfFilename : `${safePdfFilename}.pdf`,
         content: cleanBase64,
         encoding: "base64",
         contentType: "application/pdf"
@@ -643,8 +804,10 @@ app.post("/api/send-email", async (req, res): Promise<any> => {
 
   } catch (error: any) {
     console.error("Email Dispatcher API Error:", error);
-    return res.status(500).json({
-      error: error.message || "No se pudo procesar y despachar el correo electrónico."
+    return res.status(error.status || 500).json({
+      error: error.status
+        ? error.message
+        : safeErrorMessage(error, "No se pudo procesar y despachar el correo electronico.")
     });
   }
 });
@@ -653,8 +816,11 @@ app.post("/api/send-email", async (req, res): Promise<any> => {
 // Custom Express global error handler middleware to prevent plain HTML crashes and ensure tidy JSON error formats
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error("Global Handled Express Error:", err);
-  res.status(err.status || 500).json({
-    error: err.message || "An unexpected server-side error occurred in the Olli backend.",
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    error: status === 413
+      ? "La peticion es demasiado grande."
+      : safeErrorMessage(err, "Olli encontro un error inesperado en el servidor."),
   });
 });
 
