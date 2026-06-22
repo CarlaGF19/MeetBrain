@@ -1,4 +1,18 @@
-# Olli
+# Olli - Asistente Local Para Clases Y Transcripciones
+
+<div align="center">
+
+![Olli](https://img.shields.io/badge/Olli-Local%20AI%20Workspace-135BF1?style=for-the-badge)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=111827)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4-111827?style=for-the-badge&logo=express&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-Local-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+![MIT License](https://img.shields.io/badge/License-MIT-10B981?style=for-the-badge)
+
+*Transcribe clases, organiza reuniones y consulta tus apuntes con IA opcional, manteniendo tus datos bajo control local.*
+
+</div>
 
 Olli es una aplicacion local para grabar clases, transcribir audio, organizar reuniones y generar resumenes con IA bajo control del usuario. El proyecto esta pensado para funcionar primero en una laptop, con almacenamiento local en SQLite, autenticacion propia y uso opcional de Gemini solo cuando el usuario decide analizar, resumir o consultar una transcripcion.
 
@@ -360,4 +374,6 @@ Olli puede vivir en una nube privada como AWS, pero deja de ser 100% local. Ante
 
 ## Licencia
 
-Proyecto privado/en desarrollo. Define una licencia antes de distribuirlo publicamente.
+Este proyecto esta distribuido bajo licencia abierta MIT.
+
+Puedes usarlo, modificarlo y adaptarlo respetando los terminos de la licencia. Consulta el archivo `LICENSE` para el texto completo.
