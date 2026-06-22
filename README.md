@@ -129,6 +129,21 @@ La aplicacion queda disponible en:
 http://127.0.0.1:3000/
 ```
 
+### Inicio Facil Para Windows
+
+Este es el camino recomendado para alguien que no programa:
+
+1. Instala Node.js 20 LTS o 22 LTS desde [nodejs.org](https://nodejs.org/).
+2. Clona el repositorio `https://github.com/CarlaGF19/Olli.git` desde Codex, GitHub Desktop o Git.
+3. Abre la carpeta clonada.
+4. Haz doble clic en `ejecutar_windows.bat`.
+5. Espera. En el primer inicio se instalaran dependencias y luego se abrira Olli en `http://127.0.0.1:3000`.
+6. Crea una cuenta propia desde la pantalla de acceso. No compartas usuarios, contrasenas ni API keys.
+
+Para detener Olli, vuelve a la ventana negra que abrio el lanzador y presiona `Ctrl+C`.
+
+El primer uso de Whisper tambien puede descargar su modelo local. Esa descarga solo ocurre una vez por perfil del navegador, salvo que se borre su cache.
+
 ## Variables De Entorno
 
 Crea un archivo `.env` o `.env.local` si necesitas configurar servicios opcionales. Estos archivos no se suben a Git.
