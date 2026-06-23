@@ -95,11 +95,6 @@ export default function Sidebar({
       icon: Compass,
     },
     {
-      id: "library" as const,
-      label: "Biblioteca",
-      icon: BookOpen,
-    },
-    {
       id: "settings" as const,
       label: "Configuracion",
       icon: Settings,
