@@ -479,7 +479,7 @@ app.post("/api/transcribe", requireLocalUser, transcribeRateLimit, async (req, r
             liveDraft,
           config: {
             systemInstruction:
-              "You summarize local speech transcripts. Never invent missing transcript content. Keep the output in Spanish.",
+              "You summarize local speech transcripts using only the supplied text. Keep the output factual and in Spanish. Use plain text with no Markdown, emojis, decorative separators, or invented tasks.",
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -490,7 +490,7 @@ app.post("/api/transcribe", requireLocalUser, transcribeRateLimit, async (req, r
                 },
                 summary: {
                   type: Type.STRING,
-                  description: "Markdown summary in Spanish with key points and tasks when present.",
+                  description: "Factual professional plain-text summary in Spanish based only on the transcript. No Markdown, emojis, or invented tasks.",
                 },
               },
               required: ["title", "summary"],
@@ -542,7 +542,7 @@ CRITICAL: If the language of the audio is Spanish, the 'title', 'transcript', an
 
 Specifically, generate:
 1. Exact verbatim transcript in the native spoken language. EVERY sentence or speaker change MUST begin with a precise, chronological timestamp indicating exactly when it is spoken in the format '[MM:SS] Speaker: ...' (e.g., "[00:04] Speaker 1: Hola...", "[00:15] Speaker 2: Sí, claro..."). Detail the turns meticulously and timeline everything precisely.
-2. Obsidian-style summary in the native spoken language, featuring chapters with duration timestamps, clean outlines, and bulleted checklist tasks like [ ] or [x] for clear action items.
+2. A factual academic summary in plain text, based only on the spoken audio. Do not invent details. Do not use Markdown, emojis, decorative separators, or speaker labels.
 3. A short, creative title in the native spoken language summarizing the conversation.`;
 
     let userPrompt = normalizeText(promptOverride, 20_000) || "Realiza una transcripción precisa de este audio y presenta notas estructuradas en el mismo idioma en que se habla.";
@@ -581,7 +581,7 @@ Specifically, generate:
             },
             summary: {
               type: Type.STRING,
-              description: "Fully styled Markdown summary with headings, key insights, bulleted points, and checklist items.",
+              description: "Factual professional plain-text academic summary. Use only evidence from the audio, with no Markdown or emojis.",
             },
           },
           required: ["title", "transcript", "summary"],
@@ -630,8 +630,8 @@ Analyze the transcript provided and generate the response in the same language.
 CRITICAL: If the input text is in Spanish, the 'title' and 'summary' MUST be generated entirely in Spanish. Default to Spanish when in doubt.
 
 Specifically, generate:
-1. Obsidian-style summary, featuring chapters, outlines, clean bullet points, and checkbox checklists like [ ] or [x] for clear action items.
-2. A short, creative title summarizing the conversation.`;
+1. A factual academic summary based only on the supplied transcript. Do not invent facts, speakers, tasks, dates, explanations, or technical details. Use plain Spanish text with named sections, no Markdown symbols, emojis, or decorative separators.
+2. A concise, factual title that reflects only the conversation.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -648,7 +648,7 @@ Specifically, generate:
             },
             summary: {
               type: Type.STRING,
-              description: "Fully styled Markdown summary in Spanish with headings, key insights, milestones, bulleted points, and checklist items.",
+              description: "Factual professional plain-text academic summary in Spanish. Use only evidence from the transcript, with no Markdown or emojis.",
             },
           },
           required: ["title", "summary"],

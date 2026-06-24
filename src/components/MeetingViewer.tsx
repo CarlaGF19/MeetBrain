@@ -479,11 +479,12 @@ ${meeting.transcript}
     yPosition += (titleLines.length * 7.5) + 6;
 
     // Subheader / Metadata
-    const dateStr = `${formatInUTC5(meeting.date, "datetime")} (UTC-5)`;
+    const dateStr = formatInUTC5(meeting.date, "date");
+    const timeStr = `${formatInUTC5(meeting.date, "time")} (UTC-5)`;
     const durationStr = meeting.duration || "00:00";
     writeMetaPill("Fecha", dateStr, margin, yPosition);
-    writeMetaPill("Duracion", durationStr, margin + 72, yPosition);
-    writeMetaPill("Fuente", "Transcripcion local", margin + 116, yPosition);
+    writeMetaPill("Hora", timeStr, margin + 54, yPosition);
+    writeMetaPill("Duracion", durationStr, margin + 110, yPosition);
     yPosition += 14;
 
     // Horizontal line separator

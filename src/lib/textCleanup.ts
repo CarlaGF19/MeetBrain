@@ -4,12 +4,42 @@ function normalizeSpaces(text: string) {
   return text.replace(/\s+/g, " ").trim();
 }
 
+function repairCommonMojibake(text: string) {
+  const markerCount = (text.match(/[\u00c2\u00c3\u00e2]/g) || []).length;
+  if (markerCount === 0 || typeof TextDecoder === "undefined") return text;
+
+  try {
+    const bytes = Uint8Array.from(Array.from(text), (character) => character.charCodeAt(0));
+    const repaired = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    const repairedMarkerCount = (repaired.match(/[\u00c2\u00c3\u00e2]/g) || []).length;
+    return repairedMarkerCount < markerCount ? repaired : text;
+  } catch {
+    return text;
+  }
+}
+
 function stripMarkdown(text: string) {
-  return text
+  return repairCommonMojibake(text)
+    .replace(/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/gm, "")
     .replace(/^#{1,6}\s*/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/^[-*+]\s+/gm, "- ")
     .replace(/\*\*/g, "")
     .replace(/`/g, "")
-    .replace(/\[(x| )\]/gi, "[$1]");
+    .replace(/\[(x| )\]/gi, "")
+    .replace(/[\u{1F000}-\u{1FAFF}]/gu, "");
+}
+
+function isExportNoise(text: string) {
+  const compact = text.replace(/\s+/g, "");
+  if (!compact || /^(?:[-*_])+$/.test(compact)) return true;
+
+  const alphaNumeric = Array.from(compact).filter((character) => /[\p{L}\p{N}]/u.test(character)).length;
+  const suspicious = (compact.match(/[&\u00d8\u00ac\ufffd]/g) || []).length;
+  return compact.length >= 16 && (
+    alphaNumeric / compact.length < 0.45 ||
+    (suspicious >= 4 && suspicious / compact.length > 0.08)
+  );
 }
 
 export function looksLikeRepeatedLoop(text: string) {
@@ -73,12 +103,12 @@ function collapseConsecutivePhraseLoops(text: string) {
 
 export function cleanTextForExport(text: string, options: { fallback?: string; maxWords?: number } = {}) {
   const fallback = options.fallback || "(Sin contenido disponible)";
-  const withoutMarkdown = stripMarkdown(text || "");
-  const paragraphs = withoutMarkdown
+  const paragraphs = stripMarkdown(text || "")
     .split(/\n{2,}|\r?\n/)
     .map((paragraph) => collapseConsecutivePhraseLoops(paragraph))
     .map(normalizeSpaces)
     .filter(Boolean)
+    .filter((paragraph) => !isExportNoise(paragraph))
     .filter((paragraph) => !looksLikeRepeatedLoop(paragraph));
 
   let cleaned = paragraphs.join("\n\n").trim();
