@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import initSqlJs, { Database, SqlJsStatic } from "sql.js";
+import type { MeetingAnalysis } from "./src/types";
 
 type LocalUserRow = {
   id: string;
@@ -35,6 +36,7 @@ export type LocalMeeting = {
   duration: string;
   transcript: string;
   summary: string;
+  analysis?: MeetingAnalysis;
   folderId?: string | null;
   audioMimeType?: string;
   isFavorite?: boolean;
@@ -164,6 +166,7 @@ function migrate(db: Database) {
       duration TEXT NOT NULL,
       transcript TEXT NOT NULL,
       summary TEXT NOT NULL,
+      analysis_json TEXT,
       folder_id TEXT,
       audio_mime_type TEXT,
       is_favorite INTEGER NOT NULL DEFAULT 0,
@@ -199,8 +202,36 @@ function migrate(db: Database) {
   try {
     db.run("ALTER TABLE meetings ADD COLUMN folder_id TEXT");
   } catch (error) {}
+  try {
+    db.run("ALTER TABLE meetings ADD COLUMN analysis_json TEXT");
+  } catch (error) {}
 }
 
+function parseAnalysisJson(value: unknown): MeetingAnalysis | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const text = (item: unknown) => typeof item === "string" ? item.trim() : "";
+    const list = (item: unknown) => Array.isArray(item) ? item.map(text).filter(Boolean) : [];
+    const outline = Array.isArray(parsed.outline)
+      ? parsed.outline
+        .map((item: any) => ({ heading: text(item?.heading), items: list(item?.items) }))
+        .filter((item) => item.heading || item.items.length > 0)
+      : [];
+    const overview = text(parsed.overview);
+    if (!overview && !list(parsed.keyPoints).length && !outline.length) return undefined;
+    return {
+      overview,
+      keyPoints: list(parsed.keyPoints),
+      actionItems: list(parsed.actionItems),
+      outline,
+      additionalNotes: list(parsed.additionalNotes),
+    };
+  } catch {
+    return undefined;
+  }
+}
 function getSingle<T extends Record<string, any>>(db: Database, sql: string, params: any[] = []): T | null {
   const stmt = db.prepare(sql, params);
   try {
@@ -428,6 +459,7 @@ export async function listMeetings(userId: string) {
     duration: row.duration,
     transcript: row.transcript,
     summary: row.summary,
+    analysis: parseAnalysisJson(row.analysis_json),
     folderId: row.folder_id || null,
     audioMimeType: row.audio_mime_type || undefined,
     isFavorite: !!row.is_favorite,
@@ -442,8 +474,8 @@ export async function saveMeeting(userId: string, meeting: LocalMeeting) {
   const existing = getSingle(db, "SELECT id, created_at FROM meetings WHERE id = ? AND user_id = ?", [meeting.id, userId]);
   db.run(
     `INSERT OR REPLACE INTO meetings
-      (id, user_id, title, date, duration, transcript, summary, folder_id, audio_mime_type, is_favorite, audio_size_kb, is_draft, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, user_id, title, date, duration, transcript, summary, analysis_json, folder_id, audio_mime_type, is_favorite, audio_size_kb, is_draft, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       meeting.id,
       userId,
@@ -452,6 +484,7 @@ export async function saveMeeting(userId: string, meeting: LocalMeeting) {
       meeting.duration,
       meeting.transcript,
       meeting.summary,
+      meeting.analysis ? JSON.stringify(meeting.analysis) : null,
       meeting.folderId || null,
       meeting.audioMimeType || null,
       meeting.isFavorite ? 1 : 0,
@@ -475,6 +508,7 @@ export async function updateMeeting(userId: string, meetingId: string, updates: 
     duration: updates.duration ?? current.duration,
     transcript: updates.transcript ?? current.transcript,
     summary: updates.summary ?? current.summary,
+    analysis: updates.analysis !== undefined ? updates.analysis : parseAnalysisJson(current.analysis_json),
     folderId: updates.folderId !== undefined ? updates.folderId : current.folder_id ?? null,
     audioMimeType: updates.audioMimeType ?? current.audio_mime_type ?? undefined,
     isFavorite: updates.isFavorite ?? !!current.is_favorite,

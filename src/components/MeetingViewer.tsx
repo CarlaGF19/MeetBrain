@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Meeting, MeetingFolder } from "../types";
+import { Meeting, MeetingAnalysis, MeetingFolder } from "../types";
 import { formatInUTC5 } from "../lib/dateUtils";
 import { cleanTextForExport } from "../lib/textCleanup";
 import { buildAcademicTranscriptSegments } from "../lib/transcriptSegments";
@@ -182,6 +182,7 @@ Puedes pedirme decisiones, tareas, resumen ejecutivo o preguntas sobre la transc
       onUpdateMeeting(meeting.id, {
         title: data.title,
         summary: data.summary,
+        analysis: data.analysis,
         isDraft: false
       });
 
@@ -282,25 +283,20 @@ Puedes pedirme decisiones, tareas, resumen ejecutivo o preguntas sobre la transc
     return folders.find((folder) => folder.id === meeting.folderId)?.name || "Carpeta";
   };
 
-  const getSummarySections = (meeting: Meeting) => {
-    const cleanSummary = cleanTextForExport(meeting.summary, {
-      fallback: "",
+  const getSummaryAnalysis = (meeting: Meeting): MeetingAnalysis => {
+    if (meeting.analysis) return meeting.analysis;
+    const legacyOverview = cleanTextForExport(meeting.summary, {
+      fallback: "Aun no hay un analisis generado. Activa el analisis con IA cuando quieras organizar la transcripcion.",
       maxWords: 1200,
     });
-    const lines = cleanSummary.split("\n").map((line) => line.trim()).filter(Boolean);
-    const rawLines = (meeting.summary || "").split("\n").map((line) => line.trim()).filter(Boolean);
-    const actionLines = lines.filter((line) => /^\s*[-*]?\s*(\[[ xX]\])?\s*(tarea|accion|acción|pendiente|responsable|hacer|actualizar|revisar|definir)/i.test(line));
-    const outlineLines = rawLines
-      .filter((line) => /^#{1,4}\s+/.test(line) || /^\d+[\).]\s+/.test(line))
-      .map((line) => line.replace(/^#{1,4}\s+/, ""));
-
     return {
-      overview: cleanSummary || "Aun no hay resumen generado. Activa el analisis con IA cuando quieras convertir la transcripcion en puntos clave.",
-      actions: actionLines.length > 0 ? actionLines.join("\n") : "No se detectaron acciones estructuradas todavia.",
-      outline: outlineLines.length > 0 ? outlineLines.join("\n") : "No hay esquema generado todavia.",
+      overview: legacyOverview,
+      keyPoints: [],
+      actionItems: [],
+      outline: [],
+      additionalNotes: [],
     };
   };
-
   const assistantPrompts = [
     "¿Es correcto lo que explicó el profesor?",
     "¿Cuáles son las tareas o pendientes?",
@@ -432,6 +428,21 @@ ${meeting.transcript}
       });
     };
 
+    const writeBulletList = (items: string[]) => {
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(9.4);
+      doc.setTextColor(39, 48, 66);
+      items.forEach((item) => {
+        const cleanItem = cleanTextForExport(item, { fallback: "", maxWords: 120 });
+        if (!cleanItem) return;
+        const lines = doc.splitTextToSize(cleanItem, maxLineWidth - 8);
+        checkPageOverflow(lines.length * 5.1 + 3);
+        doc.setFillColor(19, 91, 241);
+        doc.circle(margin + 1.4, yPosition - 1.2, 0.9, "F");
+        doc.text(lines, margin + 5, yPosition);
+        yPosition += lines.length * 5.1 + 3;
+      });
+    };
     const writeMetaPill = (label: string, value: string, x: number, y: number) => {
       doc.setFont("Helvetica", "bold");
       doc.setFontSize(7);
@@ -503,15 +514,54 @@ ${meeting.transcript}
       && !lowerSummary.includes("audio digital capturado localmente")
       && !lowerSummary.includes("genera un resumen con ia");
     const summary = hasUsefulSummary ? cleanTextForExport(rawSummary, { maxWords: 900 }) : "";
+    const analysis = meeting.analysis;
     const transcript = cleanTextForExport(meeting.transcript, {
       fallback: "(Sin transcripcion disponible)",
       maxWords: 4500,
     });
 
-    if (scope !== "transcript" && summary) {
-      writeHeading("Resumen");
-      writeParagraphs(summary);
-      yPosition += 3;
+    if (scope !== "transcript") {
+      if (analysis) {
+        writeHeading("Resumen general");
+        writeParagraphs(cleanTextForExport(analysis.overview, { maxWords: 900 }));
+        yPosition += 2;
+
+        if (analysis.keyPoints.length > 0) {
+          writeHeading("Puntos clave");
+          writeBulletList(analysis.keyPoints);
+          yPosition += 2;
+        }
+        if (analysis.actionItems.length > 0) {
+          writeHeading("Acciones y pendientes");
+          writeBulletList(analysis.actionItems);
+          yPosition += 2;
+        }
+        if (analysis.outline.length > 0) {
+          writeHeading("Esquema de la clase");
+          analysis.outline.forEach((section) => {
+            const heading = cleanTextForExport(section.heading, { fallback: "", maxWords: 30 });
+            if (heading) {
+              checkPageOverflow(8);
+              doc.setFont("Helvetica", "bold");
+              doc.setFontSize(9.4);
+              doc.setTextColor(39, 48, 66);
+              doc.text(heading, margin, yPosition);
+              yPosition += 5;
+            }
+            writeBulletList(section.items);
+          });
+          yPosition += 2;
+        }
+        if (analysis.additionalNotes.length > 0) {
+          writeHeading("Notas adicionales");
+          writeBulletList(analysis.additionalNotes);
+          yPosition += 2;
+        }
+      } else if (summary) {
+        writeHeading("Resumen");
+        writeParagraphs(summary);
+        yPosition += 3;
+      }
     }
 
     if (scope !== "summary") {
@@ -1153,9 +1203,7 @@ ${meeting.transcript}
                         Summary
                       </button>
                     </div>
-                    {activeDocTab === "summary" && (
-                      <span className="text-[11px] font-semibold text-slate-500">Template: General</span>
-                    )}
+
                   </div>
                 </div>
 
@@ -1164,7 +1212,7 @@ ${meeting.transcript}
                     <section className="text-left">
                       <div className="flex items-center gap-2 mb-4">
                         <FileText className="w-3.5 h-3.5 text-[#135bf1]" />
-                        <h2 className="text-base font-semibold text-slate-900">Transcription</h2>
+                        <h2 className="text-base font-semibold text-slate-900">Transcripcion</h2>
                       </div>
                       <div className="font-sans text-slate-800 leading-7 text-[14px] whitespace-pre-wrap font-normal space-y-2 text-left [text-wrap:pretty]">
                         {selectedMeeting.transcript ? (
@@ -1205,51 +1253,110 @@ ${meeting.transcript}
                     </section>
                   ) : (
                     <section className="text-left space-y-5">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3">
-                        <div>
-                          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-[#135bf1]" />
-                            Summary
-                          </h2>
-                          <p className="text-xs text-slate-600 leading-5 mt-1 max-w-2xl">
-                            Genera Overview, Action Items y Outlines desde la transcripcion. Usa Gemini y consume cuota/API.
-                          </p>
-                          {summarizationError && (
-                            <p className="text-[11px] text-rose-600 font-semibold mt-2 bg-white p-2 rounded-lg border border-rose-100">
-                              Error: {summarizationError}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleSummarizeDraftText(selectedMeeting)}
-                          disabled={isSummarizing || !selectedMeeting.transcript}
-                          className="inline-flex items-center justify-center gap-2 h-9 px-3.5 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-lg text-[11px] font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isSummarizing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                          <span>{isSummarizing ? "Analizando..." : "Analizar con IA"}</span>
-                        </button>
-                      </div>
-
-                      {(["overview", "actions", "outline"] as const).map((sectionKey) => {
-                        const labels = {
-                          overview: "Overview",
-                          actions: "Action Items",
-                          outline: "Outlines",
-                        };
-                        const content = getSummarySections(selectedMeeting)[sectionKey];
+                      {(() => {
+                        const analysis = getSummaryAnalysis(selectedMeeting);
+                        const hasStructuredAnalysis = Boolean(selectedMeeting.analysis);
                         return (
-                          <div key={sectionKey} className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              {sectionKey === "overview" ? <BookOpen className="w-3.5 h-3.5 text-[#135bf1]" /> : sectionKey === "actions" ? <UserCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Filter className="w-3.5 h-3.5 text-slate-600" />}
-                              <h3 className="text-base font-semibold text-slate-900">{labels[sectionKey]}</h3>
+                          <>
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3">
+                              <div>
+                                <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                                  <Sparkles className="w-4 h-4 text-[#135bf1]" />
+                                  Analisis de la transcripcion
+                                </h2>
+                                <p className="text-xs text-slate-600 leading-5 mt-1 max-w-2xl">
+                                  {hasStructuredAnalysis
+                                    ? "Analisis guardado. Puedes actualizarlo si la transcripcion cambio."
+                                    : "Analiza la transcripcion para obtener puntos clave, pendientes, esquema y notas. Esta accion usa Gemini."}
+                                </p>
+                                {summarizationError && (
+                                  <p className="text-[11px] text-rose-600 font-semibold mt-2 bg-white p-2 rounded-lg border border-rose-100">
+                                    Error: {summarizationError}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleSummarizeDraftText(selectedMeeting)}
+                                disabled={isSummarizing || !selectedMeeting.transcript}
+                                className="inline-flex items-center justify-center gap-2 h-9 px-3.5 bg-[#135bf1] hover:bg-[#0746cc] text-white rounded-lg text-[11px] font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isSummarizing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                <span>{isSummarizing ? "Analizando..." : hasStructuredAnalysis ? "Actualizar analisis" : "Analizar con IA"}</span>
+                              </button>
                             </div>
-                            <div className="pl-6 text-[13px] leading-6 text-slate-700">
-                              {renderMarkdown(content)}
+
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <BookOpen className="w-3.5 h-3.5 text-[#135bf1]" />
+                                <h3 className="text-base font-semibold text-slate-900">Resumen general</h3>
+                              </div>
+                              <p className="pl-6 text-[13px] leading-6 text-slate-700 whitespace-pre-line">{analysis.overview}</p>
                             </div>
-                          </div>
+
+                            {analysis.keyPoints.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="w-3.5 h-3.5 text-[#135bf1]" />
+                                  <h3 className="text-base font-semibold text-slate-900">Puntos clave</h3>
+                                </div>
+                                <ul className="pl-10 space-y-2 text-[13px] leading-6 text-slate-700 list-disc">
+                                  {analysis.keyPoints.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+                                </ul>
+                              </div>
+                            )}
+
+                            {hasStructuredAnalysis && (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                  <h3 className="text-base font-semibold text-slate-900">Acciones y pendientes</h3>
+                                </div>
+                                {analysis.actionItems.length > 0 ? (
+                                  <ul className="pl-10 space-y-2 text-[13px] leading-6 text-slate-700 list-disc">
+                                    {analysis.actionItems.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+                                  </ul>
+                                ) : (
+                                  <p className="pl-6 text-[13px] leading-6 text-slate-500">No se mencionaron tareas o compromisos explicitos.</p>
+                                )}
+                              </div>
+                            )}
+
+                            {analysis.outline.length > 0 && (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <Filter className="w-3.5 h-3.5 text-slate-600" />
+                                  <h3 className="text-base font-semibold text-slate-900">Esquema de la clase</h3>
+                                </div>
+                                <div className="pl-6 space-y-3">
+                                  {analysis.outline.map((section, index) => (
+                                    <div key={`${section.heading}-${index}`}>
+                                      {section.heading && <h4 className="text-[13px] font-semibold text-slate-800">{section.heading}</h4>}
+                                      {section.items.length > 0 && (
+                                        <ul className="mt-1 ml-4 space-y-1 text-[13px] leading-6 text-slate-700 list-disc">
+                                          {section.items.map((item, itemIndex) => <li key={`${item}-${itemIndex}`}>{item}</li>)}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {analysis.additionalNotes.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <MessageSquare className="w-3.5 h-3.5 text-slate-600" />
+                                  <h3 className="text-base font-semibold text-slate-900">Notas adicionales</h3>
+                                </div>
+                                <ul className="pl-10 space-y-2 text-[13px] leading-6 text-slate-700 list-disc">
+                                  {analysis.additionalNotes.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                          </>
                         );
-                      })}
+                      })()}
                     </section>
                   )}
                 </div>

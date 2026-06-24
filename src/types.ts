@@ -18,11 +18,25 @@ export interface Meeting {
   duration: string; // formatted: 'MM:SS' or 'HH:MM:SS'
   transcript: string;
   summary: string;
+  analysis?: MeetingAnalysis;
   folderId?: string | null;
   audioMimeType?: string;
   isFavorite?: boolean;
   audioSizeKb?: number;
   isDraft?: boolean;
+}
+
+export interface MeetingOutlineSection {
+  heading: string;
+  items: string[];
+}
+
+export interface MeetingAnalysis {
+  overview: string;
+  keyPoints: string[];
+  actionItems: string[];
+  outline: MeetingOutlineSection[];
+  additionalNotes: string[];
 }
 
 export interface MeetingFolder {

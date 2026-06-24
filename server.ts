@@ -57,7 +57,7 @@ function toFriendlyGeminiError(error: any): string {
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number.parseInt(process.env.PORT || "3000", 10) || 3000;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const MAX_GENERAL_JSON_BYTES = 8 * 1024 * 1024;
 const MAX_AI_TEXT_CHARS = 180_000;
@@ -182,6 +182,51 @@ function normalizeText(value: unknown, maxChars: number) {
   return value.trim().slice(0, maxChars);
 }
 
+type GeneratedMeetingAnalysis = {
+  overview: string;
+  keyPoints: string[];
+  actionItems: string[];
+  outline: Array<{ heading: string; items: string[] }>;
+  additionalNotes: string[];
+};
+
+function normalizeAnalysisList(value: unknown, maxItems = 12, maxChars = 600) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => normalizeText(item, maxChars))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function normalizeGeneratedAnalysis(value: unknown): GeneratedMeetingAnalysis {
+  if (!value || typeof value !== "object") {
+    throw new Error("La IA no devolvio un analisis estructurado valido.");
+  }
+  const raw = value as Record<string, unknown>;
+  const outline = Array.isArray(raw.outline)
+    ? raw.outline
+      .map((item) => {
+        const section = item && typeof item === "object" ? item as Record<string, unknown> : {};
+        return {
+          heading: normalizeText(section.heading, 180),
+          items: normalizeAnalysisList(section.items, 8, 420),
+        };
+      })
+      .filter((item) => item.heading || item.items.length > 0)
+      .slice(0, 10)
+    : [];
+  const overview = normalizeText(raw.overview, 6000);
+  if (!overview) {
+    throw new Error("La IA no devolvio un resumen general valido.");
+  }
+  return {
+    overview,
+    keyPoints: normalizeAnalysisList(raw.keyPoints),
+    actionItems: normalizeAnalysisList(raw.actionItems),
+    outline,
+    additionalNotes: normalizeAnalysisList(raw.additionalNotes),
+  };
+}
 function isProbablyBase64(value: string) {
   return /^[A-Za-z0-9+/=\s]+$/.test(value);
 }
@@ -606,52 +651,66 @@ Specifically, generate:
   }
 });
 
-// Summarize a text transcript (lightweight and robust to bypass Vercel timeout errors)
+// Summarize a transcript only after an explicit user action.
 app.post("/api/summarize-text", requireLocalUser, aiRateLimit, async (req, res): Promise<any> => {
   try {
     const transcript = normalizeText(req.body?.transcript, MAX_AI_TEXT_CHARS);
-
     if (!transcript) {
-      return res.status(400).json({ error: "No se proporcionó texto de transcripción para resumir." });
+      return res.status(400).json({ error: "No se proporciono texto de transcripcion para resumir." });
     }
 
     const resolvedApiKey = await resolveUserGeminiApiKey(req);
     const ai = new GoogleGenAI({
       apiKey: resolvedApiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
+      httpOptions: { headers: { "User-Agent": "aistudio-build" } },
     });
 
-    const systemPrompt = `You are Olli, an elite AI tool designed to summarize meeting transcriptions and output gorgeous Notion & Obsidian styled summaries.
-Analyze the transcript provided and generate the response in the same language.
-CRITICAL: If the input text is in Spanish, the 'title' and 'summary' MUST be generated entirely in Spanish. Default to Spanish when in doubt.
+    const systemPrompt = `You are Olli, an academic meeting analysis assistant.
+Analyze only the supplied transcript. Reply in the same language as the transcript, defaulting to Spanish.
+Do not invent facts, speakers, owners, dates, tasks, conclusions, or terminology.
+Return a concise title and a structured analysis.
 
-Specifically, generate:
-1. A factual academic summary based only on the supplied transcript. Do not invent facts, speakers, tasks, dates, explanations, or technical details. Use plain Spanish text with named sections, no Markdown symbols, emojis, or decorative separators.
-2. A concise, factual title that reflects only the conversation.`;
+Rules for the analysis:
+- overview: one or two factual paragraphs for a student.
+- keyPoints: 3 to 8 concrete concepts, claims, or explanations from the transcript.
+- actionItems: include only explicitly stated tasks, commitments, or follow-ups. Return an empty array when there are none.
+- outline: group the real topics into short headings with supporting points. Do not repeat the full transcript.
+- additionalNotes: include only useful clarifications, uncertainties, or study notes grounded in the transcript. Return an empty array when none apply.
+- Do not use Markdown, emojis, decorative separators, or speaker labels that are not present in the source.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
-      contents: `Por favor resume la siguiente transcripción en español:\n\n${transcript}`,
+      contents: `Analiza la siguiente transcripcion y devuelve el JSON solicitado:\n\n${transcript}`,
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            title: {
-              type: Type.STRING,
-              description: "Snappy, clean meeting title in Spanish.",
-            },
-            summary: {
-              type: Type.STRING,
-              description: "Factual professional plain-text academic summary in Spanish. Use only evidence from the transcript, with no Markdown or emojis.",
+            title: { type: Type.STRING, description: "Short factual title in the transcript language." },
+            analysis: {
+              type: Type.OBJECT,
+              properties: {
+                overview: { type: Type.STRING },
+                keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                actionItems: { type: Type.ARRAY, items: { type: Type.STRING } },
+                outline: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      heading: { type: Type.STRING },
+                      items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    },
+                    required: ["heading", "items"],
+                  },
+                },
+                additionalNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
+              },
+              required: ["overview", "keyPoints", "actionItems", "outline", "additionalNotes"],
             },
           },
-          required: ["title", "summary"],
+          required: ["title", "analysis"],
         },
       },
     });
@@ -661,12 +720,13 @@ Specifically, generate:
     }
 
     const result = JSON.parse(response.text);
+    const analysis = normalizeGeneratedAnalysis(result.analysis);
     return res.json({
-      title: result.title,
-      transcript: transcript,
-      summary: result.summary,
+      title: normalizeText(result.title, 160) || "Sesion sin titulo",
+      transcript,
+      summary: analysis.overview,
+      analysis,
     });
-
   } catch (error: any) {
     console.error("Summarize-Text API Error:", error);
     return res.status(500).json({
@@ -674,7 +734,6 @@ Specifically, generate:
     });
   }
 });
-
 // Interactive AI Chat Assistant for meeting notes answering questions about transcript
 app.post("/api/chat", requireLocalUser, aiRateLimit, async (req, res): Promise<any> => {
   try {
