@@ -53,6 +53,8 @@ interface MeetingViewerProps {
   onDeleteFolder: (id: string) => Promise<void>;
 }
 
+type PdfExportScope = "both" | "transcript" | "summary";
+
 interface ChatMessage {
   role: "user" | "model";
   content: string;
@@ -92,6 +94,7 @@ export default function MeetingViewer({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [isPdfExportModalOpen, setIsPdfExportModalOpen] = useState(false);
 
 
 
@@ -364,7 +367,7 @@ ${meeting.transcript}
     downloadFile(`${cleanName}-vault.json`, jsonStr, "application/json");
   };
 
-  const generatePDFDoc = (meeting: Meeting): jsPDF => {
+  const generatePDFDoc = (meeting: Meeting, scope: PdfExportScope = "both"): jsPDF => {
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "mm",
@@ -505,31 +508,35 @@ ${meeting.transcript}
       maxWords: 4500,
     });
 
-    if (summary) {
+    if (scope !== "transcript" && summary) {
       writeHeading("Resumen");
       writeParagraphs(summary);
       yPosition += 3;
     }
 
-    writeHeading("Transcripcion");
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(100, 116, 139);
-    const note = "Documento generado sin identificacion automatica de hablantes. Los bloques se organizan por tiempo para facilitar lectura y revision.";
-    const noteLines = doc.splitTextToSize(note, maxLineWidth);
-    doc.text(noteLines, margin, yPosition);
-    yPosition += noteLines.length * 4.5 + 7;
+    if (scope !== "summary") {
+      writeHeading("Transcripcion");
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      const note = "Documento generado sin identificacion automatica de hablantes. Los bloques se organizan por tiempo para facilitar lectura y revision.";
+      const noteLines = doc.splitTextToSize(note, maxLineWidth);
+      doc.text(noteLines, margin, yPosition);
+      yPosition += noteLines.length * 4.5 + 7;
 
-    const segments = buildAcademicTranscriptSegments(transcript, meeting.duration, 120);
-    segments.forEach((segment) => writeSegment(segment.label, segment.timestamp, segment.text));
+      const segments = buildAcademicTranscriptSegments(transcript, meeting.duration, 120);
+      segments.forEach((segment) => writeSegment(segment.label, segment.timestamp, segment.text));
+    }
 
     return doc;
   };
 
-  const handleExportPDF = (meeting: Meeting) => {
-    const doc = generatePDFDoc(meeting);
+  const handleExportPDF = (meeting: Meeting, scope: PdfExportScope) => {
+    const doc = generatePDFDoc(meeting, scope);
     const cleanName = meeting.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    doc.save(`${cleanName}-olli.pdf`);
+    const suffix = scope === "summary" ? "resumen" : scope === "transcript" ? "transcripcion" : "resumen-y-transcripcion";
+    doc.save(`${cleanName}-${suffix}-olli.pdf`);
+    setIsPdfExportModalOpen(false);
   };
 
   const handleSendEmail = async () => {
@@ -1040,7 +1047,7 @@ ${meeting.transcript}
                     <Download className="w-3.5 h-3.5" />
                   </button>
                   <button
-                    onClick={() => handleExportPDF(selectedMeeting)}
+                    onClick={() => setIsPdfExportModalOpen(true)}
                     className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-white border border-[#E9E9EB] hover:bg-emerald-55 text-slate-500 hover:text-emerald-600 transition-colors cursor-pointer"
                     title="Descargar PDF"
                   >
@@ -1422,6 +1429,86 @@ ${meeting.transcript}
         )}
       </div>
 
+      <AnimatePresence>
+        {isPdfExportModalOpen && selectedMeeting && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.button
+              type="button"
+              aria-label="Cerrar selector de PDF"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsPdfExportModalOpen(false)}
+              className="absolute inset-0 cursor-default bg-slate-950/35 backdrop-blur-[1px]"
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="pdf-export-title"
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              className="relative z-10 w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 id="pdf-export-title" className="text-sm font-bold text-slate-900">Descargar PDF</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">Elige el contenido que quieres incluir.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPdfExportModalOpen(false)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  title="Cerrar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExportPDF(selectedMeeting, "both")}
+                  className="flex items-center justify-between rounded-lg border border-[#135bf1] bg-[#135bf1] px-4 py-3 text-left text-white transition-colors hover:bg-[#0d4ed8]"
+                >
+                  <span>
+                    <span className="block text-sm font-bold">Resumen y transcripcion</span>
+                    <span className="mt-1 block text-xs text-white/80">Documento completo de la sesion.</span>
+                  </span>
+                  <FileText className="h-4 w-4 shrink-0" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportPDF(selectedMeeting, "transcript")}
+                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-slate-700 transition-colors hover:border-[#135bf1]/40 hover:bg-slate-50"
+                >
+                  <span>
+                    <span className="block text-sm font-bold">Solo transcripcion</span>
+                    <span className="mt-1 block text-xs text-slate-500">Texto segmentado por tiempo.</span>
+                  </span>
+                  <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportPDF(selectedMeeting, "summary")}
+                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-slate-700 transition-colors hover:border-[#135bf1]/40 hover:bg-slate-50"
+                >
+                  <span>
+                    <span className="block text-sm font-bold">Solo resumen</span>
+                    <span className="mt-1 block text-xs text-slate-500">Sintesis generada a partir de la sesion.</span>
+                  </span>
+                  <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       {/* EMAIL REPORT PDF DISPATCH MODAL */}
       <AnimatePresence>
         {isEmailModalOpen && selectedMeeting && (
