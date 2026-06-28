@@ -42,6 +42,10 @@ function toFriendlyGeminiError(error: any): string {
     return "Gemini alcanzó el límite de cuota de tu API key. Espera a que se renueve la cuota o usa otra clave en Settings.";
   }
 
+  if (raw.includes("503") || lower.includes("unavailable") || lower.includes("high demand") || lower.includes("overloaded")) {
+    return "Gemini esta saturado temporalmente. Olli conservo la transcripcion local como respaldo; intenta la transcripcion precisa nuevamente en unos minutos.";
+  }
+
   if (raw.includes("401") || raw.includes("403") || lower.includes("api key") || lower.includes("permission")) {
     return "La API key de Gemini no es válida o no tiene permisos. Revisa la clave guardada en Settings.";
   }
@@ -654,9 +658,7 @@ Use the audio as the source of truth. Correct the draft only when the audio supp
   } catch (error: any) {
     console.error("Transcribe API Error Details:", error);
     return res.status(error.status || 500).json({
-      error: error.status
-        ? error.message
-        : toFriendlyGeminiError(error) || "No se pudo transcribir el audio. Verifica tu API key de Gemini en Settings.",
+      error: toFriendlyGeminiError(error) || "No se pudo transcribir el audio. Verifica tu API key de Gemini en Settings.",
     });
   }
 });

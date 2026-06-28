@@ -617,8 +617,8 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
     return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   };
 
-  const waitForDigitalLiveIdle = async () => {
-    const deadline = Date.now() + 30_000;
+  const waitForDigitalLiveIdle = async (maxWaitMs = 30_000) => {
+    const deadline = Date.now() + maxWaitMs;
     while (digitalLiveBusyRef.current && Date.now() < deadline) {
       await new Promise((resolve) => window.setTimeout(resolve, 80));
     }
@@ -986,17 +986,25 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
       mediaRecorder.onstop = async () => {
         try {
-          // Do not release the PCM buffer until Whisper has consumed the final captured segment.
-          await waitForDigitalLiveIdle();
-          await flushDigitalLiveTranscript(true);
-          await waitForDigitalLiveIdle();
+          const shouldUsePreciseApi = captureSourceRef.current === "screen" && apiPreciseTranscriptionRef.current && settings.hasApiKey;
+
+          if (shouldUsePreciseApi) {
+            setProcessingStatus("Cerrando audio y enviando a Gemini...");
+            // Do not block API transcription on a slow final Whisper pass. Local Whisper remains only as backup.
+            await waitForDigitalLiveIdle(1_500);
+          } else {
+            // Do not release the PCM buffer until Whisper has consumed the final captured segment.
+            await waitForDigitalLiveIdle();
+            await flushDigitalLiveTranscript(true);
+            await waitForDigitalLiveIdle();
+          }
 
           const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
           const finalTranscript = liveTranscriptRef.current.trim();
           const dur = durationRef.current || 0;
 
           if (captureSourceRef.current === "screen") {
-            if (apiPreciseTranscriptionRef.current && settings.hasApiKey && audioBlob.size > 0) {
+            if (shouldUsePreciseApi && audioBlob.size > 0) {
               await handleAudioProcess(audioBlob, dur, finalTranscript, true);
               return;
             }
@@ -1296,34 +1304,54 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
       // 2. Call local `/api/transcribe` backend endpoint (always server-side to adhere to security rules and prevent client browser CORS/shield blockages)
       let json;
       setProcessingStatus(forceAudioTranscription ? "Transcribiendo con API precisa de Gemini..." : "Transcribiendo y analizando con Gemini AI...");
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          audio: base64Data,
-          mimeType: blob.type || "audio/webm",
-          liveDraftText: liveDraftOverride,
-          forceAudioTranscription,
-        }),
-      });
+      const controller = new AbortController();
+      const timeoutMs = forceAudioTranscription ? 45_000 : 60_000;
+      const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+      let response: Response;
+      try {
+        response = await fetch("/api/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            audio: base64Data,
+            mimeType: blob.type || "audio/webm",
+            liveDraftText: liveDraftOverride,
+            forceAudioTranscription,
+          }),
+        });
+      } catch (fetchError: any) {
+        if (fetchError?.name === "AbortError") {
+          throw new Error("Gemini tardo demasiado en responder. Olli conservo la transcripcion local como respaldo; intenta la transcripcion precisa nuevamente en unos minutos.");
+        }
+        throw fetchError;
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
 
       // Read response as text ONCE to avoid "body stream already read" and secure clean handling of server error text pages
       const rawText = await response.text();
 
       if (!response.ok) {
-        let errorMsg = "Fallo en la transcripción de audio.";
+        let errorMsg = "Fallo en la transcripcion de audio.";
         try {
-          // If the server sent standard JSON error response, use it
           const jsonError = JSON.parse(rawText);
-          errorMsg = jsonError.error || errorMsg;
+          const payload = jsonError?.error;
+          if (typeof payload === "string") {
+            errorMsg = payload;
+          } else if (payload && typeof payload === "object") {
+            errorMsg = payload.message || payload.status || JSON.stringify(payload);
+          }
         } catch (e) {
-          // Fallback to analyze raw HTML / text or custom status errors from proxy layers like Vercel
+          const lowerRaw = rawText.toLowerCase();
           if (rawText.includes("Payload Too Large") || response.status === 413) {
-            errorMsg = "El audio es demasiado pesado. Las funciones sin servidor de Vercel limitan las subidas a 4.5 MB. Por favor realiza grabaciones de menor duración.";
-          } else if (response.status === 504 || response.status === 502 || rawText.toLowerCase().includes("timeout") || rawText.includes("FUNCTION_INVOCATION_FAILED")) {
-            errorMsg = "La transcripción superó el límite de tiempo (timeout) de Vercel. En cuentas gratuitas (Hobby), Vercel limita la ejecución de funciones a 10 segundos. Para grabar sesiones más largas, te sugerimos correr la aplicación de forma local (con 'npm run dev') o en un servidor dedicado.";
+            errorMsg = "El audio es demasiado pesado. Divide la grabacion en partes mas cortas.";
+          } else if (response.status === 503 || lowerRaw.includes("unavailable") || lowerRaw.includes("high demand") || lowerRaw.includes("overloaded")) {
+            errorMsg = "Gemini esta saturado temporalmente. Olli guardo tu transcripcion local como respaldo; intenta la transcripcion precisa nuevamente en unos minutos.";
+          } else if (response.status === 504 || response.status === 502 || lowerRaw.includes("timeout") || rawText.includes("FUNCTION_INVOCATION_FAILED")) {
+            errorMsg = "La transcripcion supero el tiempo de espera. Olli conserva el respaldo local.";
           } else {
-            errorMsg = `Error en el servidor de transacciones (Estado ${response.status}). Detalle: ${rawText.substring(0, 150)}...`;
+            errorMsg = `Error en el servidor de transcripcion (Estado ${response.status}).`;
           }
         }
         throw new Error(errorMsg);
@@ -1352,7 +1380,7 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
           transcript: recoveredTranscript,
           summary: "La transcripción local se guardó como respaldo. No se pudo analizar el audio ni generar un resumen automático.",
         }, durationSec);
-        setErrorMessage("La transcripción local se guardó como respaldo, pero el procesamiento de audio no pudo completarse.");
+        setErrorMessage(getFriendlyErrorMessage(err.message || "La transcripcion local se guardo como respaldo, pero el procesamiento de audio no pudo completarse."));
       } else {
         setErrorMessage(err.message || "No se pudo procesar el audio.");
       }
@@ -1583,6 +1611,10 @@ export default function AudioRecorder({ onTranscriptionSuccess, settings, onUpda
 
     if (raw.includes("429") || lower.includes("quota") || lower.includes("resource_exhausted")) {
       return "Gemini alcanzo el limite de cuota de tu API key. Espera a que se renueve la cuota o usa otra clave en Settings.";
+    }
+
+    if (raw.includes("503") || lower.includes("unavailable") || lower.includes("high demand") || lower.includes("overloaded")) {
+      return "Gemini esta saturado temporalmente. Olli guardo tu transcripcion local como respaldo; intenta la transcripcion precisa nuevamente en unos minutos.";
     }
 
     if (raw.includes("401") || raw.includes("403") || lower.includes("api key") || lower.includes("permission")) {
